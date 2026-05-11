@@ -53,6 +53,12 @@ class ScanResponse(BaseModel):
     findings: list[Finding]
 
 
+class GitHubScanRequest(BaseModel):
+    """Request to scan a public GitHub repository."""
+    
+    repo_url: str = Field(..., description="Public GitHub repository URL")
+
+
 class ExplainFinding(BaseModel):
     """Finding payload used for AI explanation."""
     

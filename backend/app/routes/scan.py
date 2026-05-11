@@ -1,8 +1,9 @@
 """Scan route."""
 from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from app.services.github_scanner import GitHubScanError, clone_github_repo_temp
 from app.services.zip_handler import extract_zip_temp, ZipExtractionError
 from app.services.scanner import generate_summary, scan_directory
-from app.models import ScanResponse
+from app.models import GitHubScanRequest, ScanResponse
 
 router = APIRouter(prefix="/api/v1", tags=["scan"])
 
@@ -48,4 +49,28 @@ async def upload_and_scan_zip(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred during scanning"
+        )
+
+
+@router.post("/scan/github", response_model=ScanResponse)
+async def scan_github_repository(request: GitHubScanRequest):
+    """
+    Clone and scan a public GitHub repository.
+
+    Returns the same summary and findings shape as ZIP scanning.
+    """
+    try:
+        with clone_github_repo_temp(request.repo_url) as repo_dir:
+            findings = scan_directory(repo_dir)
+            return ScanResponse(summary=generate_summary(findings), findings=findings)
+
+    except GitHubScanError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during GitHub scanning",
         )

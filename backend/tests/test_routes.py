@@ -177,3 +177,71 @@ class TestExplainEndpoint:
         assert response.status_code == 200
         payload = response.json()
         assert "AI explanation is currently unavailable" in payload["explanation"]
+
+    def test_explain_endpoint_fallback_on_missing_api_key(self, client, monkeypatch):
+        """Test friendly fallback when Gemini is not configured."""
+        monkeypatch.setattr(explainer, "_get_env_value", lambda name: "")
+
+        response = client.post("/api/v1/explain", json=self._payload())
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert "not configured" in payload["explanation"]
+
+    def test_explain_endpoint_fallback_on_invalid_api_key(self, client, monkeypatch):
+        """Test friendly fallback when Gemini rejects the API key."""
+        def fake_call(prompt):
+            raise explainer.InvalidAPIKeyError("bad key")
+
+        monkeypatch.setattr(explainer, "_call_gemini", fake_call)
+
+        response = client.post("/api/v1/explain", json=self._payload())
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert "API key was rejected" in payload["explanation"]
+
+    def test_explain_endpoint_fallback_on_timeout(self, client, monkeypatch):
+        """Test friendly fallback when Gemini times out."""
+        def fake_call(prompt):
+            raise explainer.ExplanationTimeoutError("timed out")
+
+        monkeypatch.setattr(explainer, "_call_gemini", fake_call)
+
+        response = client.post("/api/v1/explain", json=self._payload())
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert "took too long" in payload["explanation"]
+
+    def test_explain_prompt_requests_concise_json(self):
+        """Test prompt asks for parseable concise JSON."""
+        prompt = explainer._build_prompt(
+            explainer.ExplainFinding(**self._payload()["finding"])
+        )
+
+        assert "Return valid JSON only" in prompt
+        assert "Keep each value under 80 words" in prompt
+
+    def test_explain_prompt_masks_secret_evidence(self):
+        """Test prompt does not send raw secret-looking evidence to AI."""
+        payload = self._payload()
+        payload["finding"]["evidence"] = 'OPENAI_API_KEY = "sk-proj-secretValue123456"'
+
+        prompt = explainer._build_prompt(
+            explainer.ExplainFinding(**payload["finding"])
+        )
+
+        assert "sk-proj-secretValue123456" not in prompt
+        assert "sk-proj-***" in prompt
+
+    def test_cache_key_does_not_contain_evidence(self):
+        """Test cache key is a digest, not raw evidence."""
+        payload = self._payload()
+        payload["finding"]["evidence"] = "very-secret-value"
+        finding = explainer.ExplainFinding(**payload["finding"])
+
+        cache_key = explainer._cache_key(finding)
+
+        assert "very-secret-value" not in cache_key
+        assert len(cache_key) == 64

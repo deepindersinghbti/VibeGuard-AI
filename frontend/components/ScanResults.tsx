@@ -85,7 +85,7 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
     const handleExplain = async (finding: Finding, key: string) => {
         setOpenExplanations((current) => ({ ...current, [key]: true }));
 
-        if (explanations[key]) {
+        if (loadingExplanations[key] || explanations[key]) {
             return;
         }
 
@@ -178,13 +178,20 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                         <button
                                             type="button"
                                             onClick={() => handleExplain(finding, key)}
-                                            disabled={isLoading}
+                                            disabled={isLoading || Boolean(explanation)}
                                             className="mt-3 px-3 py-2 bg-gray-900 text-white text-sm font-semibold rounded hover:bg-gray-800 disabled:bg-gray-500 disabled:cursor-not-allowed"
                                         >
-                                            {isLoading ? "Generating explanation..." : "Explain"}
+                                            {isLoading
+                                                ? "Generating explanation..."
+                                                : explanation
+                                                  ? "Explanation generated"
+                                                  : "Explain"}
                                         </button>
                                         {isOpen && (
                                             <div className="mt-4 p-4 bg-white border border-gray-200 rounded text-gray-900">
+                                                <p className="mb-3 text-xs font-semibold text-gray-500">
+                                                    AI explanation only — detection is rule-based
+                                                </p>
                                                 {isLoading && (
                                                     <p className="text-sm text-gray-600">
                                                         Generating explanation...
