@@ -83,3 +83,4 @@ class ExplainResponse(BaseModel):
     explanation: str
     attack_scenario: str = ""
     fix_details: str = ""
+    error_code: str = ""  # Internal error code for debugging: ai_rate_limited, ai_timeout, ai_empty_response, ai_invalid_response, ai_invalid_key, etc.

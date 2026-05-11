@@ -32,6 +32,7 @@ export interface ExplainResponse {
     explanation: string;
     attack_scenario: string;
     fix_details: string;
+    error_code?: string;  // Internal error code for debugging/logging
 }
 
 export interface ScanError {

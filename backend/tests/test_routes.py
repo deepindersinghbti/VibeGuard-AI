@@ -126,7 +126,7 @@ class TestExplainEndpoint:
 
     def test_explain_endpoint_returns_valid_structure(self, client, monkeypatch):
         """Test explanation endpoint response shape."""
-        def fake_call(prompt):
+        def fake_call(prompt, rule_id="", title=""):
             return ExplainResponse(
                 explanation="This can run untrusted code.",
                 attack_scenario="An attacker submits JavaScript that steals data.",
@@ -147,7 +147,7 @@ class TestExplainEndpoint:
         """Test the same finding does not trigger duplicate AI calls."""
         calls = {"count": 0}
 
-        def fake_call(prompt):
+        def fake_call(prompt, rule_id="", title=""):
             calls["count"] += 1
             return ExplainResponse(
                 explanation="Cached explanation.",
@@ -167,7 +167,7 @@ class TestExplainEndpoint:
 
     def test_explain_endpoint_fallback_on_failure(self, client, monkeypatch):
         """Test fallback response when AI generation fails."""
-        def fake_call(prompt):
+        def fake_call(prompt, rule_id="", title=""):
             raise RuntimeError("AI unavailable")
 
         monkeypatch.setattr(explainer, "_call_gemini", fake_call)
@@ -190,7 +190,7 @@ class TestExplainEndpoint:
 
     def test_explain_endpoint_fallback_on_invalid_api_key(self, client, monkeypatch):
         """Test friendly fallback when Gemini rejects the API key."""
-        def fake_call(prompt):
+        def fake_call(prompt, rule_id="", title=""):
             raise explainer.InvalidAPIKeyError("bad key")
 
         monkeypatch.setattr(explainer, "_call_gemini", fake_call)
@@ -203,7 +203,7 @@ class TestExplainEndpoint:
 
     def test_explain_endpoint_fallback_on_timeout(self, client, monkeypatch):
         """Test friendly fallback when Gemini times out."""
-        def fake_call(prompt):
+        def fake_call(prompt, rule_id="", title=""):
             raise explainer.ExplanationTimeoutError("timed out")
 
         monkeypatch.setattr(explainer, "_call_gemini", fake_call)

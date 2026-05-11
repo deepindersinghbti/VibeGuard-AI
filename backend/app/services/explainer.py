@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import socket
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -19,25 +20,47 @@ DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 REQUEST_TIMEOUT_SECONDS = 12
 LOGGER = logging.getLogger(__name__)
 
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 GENERIC_FALLBACK_RESPONSE = ExplainResponse(
     explanation="AI explanation is currently unavailable. Refer to the recommendation above.",
     attack_scenario="No AI-generated attack scenario is available right now.",
     fix_details="Use the recommendation shown with this finding and review the flagged line.",
+    error_code="ai_model_request_failed",
 )
 MISSING_KEY_FALLBACK_RESPONSE = ExplainResponse(
     explanation="AI explanations are not configured yet. Add GEMINI_API_KEY to the backend environment to enable them.",
     attack_scenario="No AI-generated attack scenario is available right now.",
     fix_details="Use the recommendation shown with this finding, then configure the backend Gemini key when you want AI help.",
+    error_code="ai_missing_api_key",
 )
 INVALID_KEY_FALLBACK_RESPONSE = ExplainResponse(
     explanation="AI explanations could not be generated because the configured Gemini API key was rejected.",
     attack_scenario="No AI-generated attack scenario is available right now.",
     fix_details="Check backend/.env or the server environment and replace GEMINI_API_KEY with a valid Google AI Studio key.",
+    error_code="ai_invalid_key",
 )
 TIMEOUT_FALLBACK_RESPONSE = ExplainResponse(
     explanation="AI explanation took too long to generate. Refer to the recommendation above.",
     attack_scenario="No AI-generated attack scenario is available right now.",
     fix_details="Try again in a moment, or use the recommendation shown with this finding.",
+    error_code="ai_timeout",
+)
+RATE_LIMIT_FALLBACK_RESPONSE = ExplainResponse(
+    explanation="AI explanation service is temporarily overloaded. Please try again in a few moments.",
+    attack_scenario="No AI-generated attack scenario is available right now.",
+    fix_details="Retry this request after waiting a moment. Use the recommendation shown with this finding in the meantime.",
+    error_code="ai_rate_limited",
+)
+EMPTY_RESPONSE_FALLBACK_RESPONSE = ExplainResponse(
+    explanation="AI explanation service returned an empty response. Refer to the recommendation above.",
+    attack_scenario="No AI-generated attack scenario is available right now.",
+    fix_details="Try again, or use the recommendation shown with this finding.",
+    error_code="ai_empty_response",
 )
 
 _EXPLANATION_CACHE: Dict[str, ExplainResponse] = {}
@@ -142,24 +165,34 @@ def _parse_gemini_response(payload: dict) -> ExplainResponse:
         .get("text", "")
     )
     if not text:
-        raise ValueError("Gemini response did not include text")
+        raise ValueError("Gemini response did not include text (empty response)")
 
     cleaned_text = text.strip()
+    if not cleaned_text:
+        raise ValueError("Gemini response was empty after stripping whitespace")
+    
     if cleaned_text.startswith("```json"):
         cleaned_text = cleaned_text.removeprefix("```json").removesuffix("```").strip()
     elif cleaned_text.startswith("```"):
         cleaned_text = cleaned_text.removeprefix("```").removesuffix("```").strip()
 
     parsed = json.loads(cleaned_text)
+    
+    # Validate required fields
+    explanation = parsed.get("explanation", "").strip()
+    if not explanation:
+        raise ValueError("Gemini response explanation was empty")
+    
     return ExplainResponse(
-        explanation=parsed["explanation"],
+        explanation=explanation,
         attack_scenario=parsed.get("attack_scenario", ""),
         fix_details=parsed.get("fix_details", ""),
     )
 
 
-def _call_gemini(prompt: str) -> ExplainResponse:
+def _call_gemini(prompt: str, rule_id: str = "", title: str = "") -> ExplainResponse:
     """Call Gemini and return a structured explanation."""
+    start_time = time.time()
     api_key = _get_env_value("GEMINI_API_KEY")
     if not api_key:
         raise MissingAPIKeyError("GEMINI_API_KEY is not configured")
@@ -197,12 +230,45 @@ def _call_gemini(prompt: str) -> ExplainResponse:
         with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
             response_body = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
-        if exc.code in {400, 401, 403}:
+        elapsed = time.time() - start_time
+        if exc.code == 429:
+            LOGGER.warning(
+                "AI rate limit hit | rule_id=%s | title=%s | model=%s | status=429 | elapsed_sec=%.2f",
+                rule_id, title, model, elapsed
+            )
+            raise ExplanationTimeoutError("Rate limited by Gemini API") from exc
+        elif exc.code in {400, 401, 403}:
+            LOGGER.warning(
+                "AI invalid API key | rule_id=%s | title=%s | model=%s | status=%d | elapsed_sec=%.2f",
+                rule_id, title, model, exc.code, elapsed
+            )
             raise InvalidAPIKeyError("Gemini rejected the configured API key") from exc
-        raise
+        else:
+            LOGGER.error(
+                "AI HTTP error | rule_id=%s | title=%s | model=%s | status=%d | elapsed_sec=%.2f",
+                rule_id, title, model, exc.code, elapsed
+            )
+            raise
     except (TimeoutError, socket.timeout) as exc:
+        elapsed = time.time() - start_time
+        LOGGER.warning(
+            "AI request timeout | rule_id=%s | title=%s | model=%s | timeout_sec=%d | elapsed_sec=%.2f",
+            rule_id, title, model, REQUEST_TIMEOUT_SECONDS, elapsed
+        )
         raise ExplanationTimeoutError("Gemini request timed out") from exc
+    except Exception as exc:
+        elapsed = time.time() - start_time
+        LOGGER.error(
+            "AI request error | rule_id=%s | title=%s | model=%s | error_type=%s | elapsed_sec=%.2f",
+            rule_id, title, model, exc.__class__.__name__, elapsed
+        )
+        raise
 
+    elapsed = time.time() - start_time
+    LOGGER.debug(
+        "AI request success | rule_id=%s | title=%s | model=%s | elapsed_sec=%.2f",
+        rule_id, title, model, elapsed
+    )
     return _parse_gemini_response(json.loads(response_body))
 
 
@@ -213,7 +279,15 @@ def _fallback_for_error(error: Exception) -> ExplainResponse:
     if isinstance(error, InvalidAPIKeyError):
         return INVALID_KEY_FALLBACK_RESPONSE
     if isinstance(error, ExplanationTimeoutError):
+        # Check if this was a rate limit by looking at the cause
+        if "Rate limited" in str(error):
+            return RATE_LIMIT_FALLBACK_RESPONSE
         return TIMEOUT_FALLBACK_RESPONSE
+    if isinstance(error, ValueError):
+        # Empty response or parse error
+        if "empty" in str(error).lower():
+            return EMPTY_RESPONSE_FALLBACK_RESPONSE
+        return GENERIC_FALLBACK_RESPONSE
     return GENERIC_FALLBACK_RESPONSE
 
 
@@ -221,11 +295,23 @@ async def explain_finding(finding: ExplainFinding) -> ExplainResponse:
     """Explain a finding, using an in-memory cache to avoid duplicate AI calls."""
     cache_key = _cache_key(finding)
     if cache_key in _EXPLANATION_CACHE:
-        return _EXPLANATION_CACHE[cache_key]
+        cached = _EXPLANATION_CACHE[cache_key]
+        if cached.error_code:
+            # Cached error - log that we're returning it
+            LOGGER.debug(
+                "Returning cached error | rule_id=%s | error_code=%s",
+                finding.rule_id, cached.error_code
+            )
+        return cached
 
     prompt = _build_prompt(finding)
     try:
-        explanation = await asyncio.to_thread(_call_gemini, prompt)
+        explanation = await asyncio.to_thread(
+            _call_gemini, prompt, finding.rule_id, finding.title
+        )
+        # Success - cache it
+        _EXPLANATION_CACHE[cache_key] = explanation
+        return explanation
     except (
         MissingAPIKeyError,
         InvalidAPIKeyError,
@@ -236,11 +322,15 @@ async def explain_finding(finding: ExplainFinding) -> ExplainResponse:
         json.JSONDecodeError,
         urllib.error.URLError,
     ) as error:
-        LOGGER.warning("AI explanation unavailable: %s", error.__class__.__name__)
-        return _fallback_for_error(error)
-
-    _EXPLANATION_CACHE[cache_key] = explanation
-    return explanation
+        # Log the error with context
+        LOGGER.warning(
+            "AI explanation failed | rule_id=%s | error_type=%s | error_msg=%s",
+            finding.rule_id, error.__class__.__name__, str(error)[:100]
+        )
+        fallback = _fallback_for_error(error)
+        # Cache the error response too, so we don't retry immediately
+        _EXPLANATION_CACHE[cache_key] = fallback
+        return fallback
 
 
 def clear_explanation_cache() -> None:

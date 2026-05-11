@@ -93,5 +93,10 @@ export async function explainFinding(finding: Finding): Promise<ExplainResponse>
         throw new Error("Invalid explanation response from server. Please try again.");
     }
 
+    // Log internal error code to console for debugging if present (not shown to user)
+    if (explanation.error_code && typeof window !== "undefined" && window.location.hostname === "localhost") {
+        console.debug(`[ExplainFinding] Internal error code: ${explanation.error_code}`);
+    }
+
     return explanation;
 }
