@@ -36,6 +36,17 @@ ALLOWED_EXTENSIONS = {
 }
 
 
+def is_allowed_scan_file(file_path: str) -> bool:
+    """Check whether a file name is supported by the scanners."""
+    path = Path(file_path)
+    name = path.name.lower()
+    
+    if name == ".env" or name.startswith(".env."):
+        return True
+    
+    return path.suffix.lower() in ALLOWED_EXTENSIONS
+
+
 class ZipExtractionError(Exception):
     """Raised when ZIP extraction fails validation."""
     pass
@@ -181,8 +192,8 @@ def should_skip_file(file_path: str) -> bool:
         if part in SKIP_DIRS:
             return True
     
-    # Check file extension
-    if not Path(file_path).suffix.lower() in ALLOWED_EXTENSIONS:
+    # Check file extension or supported dotfile name
+    if not is_allowed_scan_file(file_path):
         return True
     
     return False

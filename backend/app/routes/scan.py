@@ -1,13 +1,13 @@
 """Scan route."""
 from fastapi import APIRouter, UploadFile, File, HTTPException, status
 from app.services.zip_handler import extract_zip_temp, ZipExtractionError
-from app.services.scanner import scan_directory
-from app.models import Finding
+from app.services.scanner import generate_summary, scan_directory
+from app.models import ScanResponse
 
 router = APIRouter(prefix="/api/v1", tags=["scan"])
 
 
-@router.post("/scan/zip", response_model=list[Finding])
+@router.post("/scan/zip", response_model=ScanResponse)
 async def upload_and_scan_zip(file: UploadFile = File(...)):
     """
     Upload and scan a ZIP file for security issues.
@@ -37,7 +37,7 @@ async def upload_and_scan_zip(file: UploadFile = File(...)):
         with extract_zip_temp(content) as extract_dir:
             # Scan the extracted directory
             findings = scan_directory(extract_dir)
-            return findings
+            return ScanResponse(summary=generate_summary(findings), findings=findings)
         
     except ZipExtractionError as e:
         raise HTTPException(

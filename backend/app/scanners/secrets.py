@@ -22,7 +22,7 @@ SECRET_PATTERNS = {
 
 # Value-based secret patterns that do not depend on variable names.
 VALUE_PATTERNS: Tuple[Tuple[str, str, str], ...] = (
-    (r"\b(sk-(?:proj-)?[A-Za-z0-9_-]{8,})\b", "openai_value", "OpenAI-style key"),
+    (r"\b((?:sk-(?:proj-)?[A-Za-z0-9_-]{8,}|sk_test_[A-Za-z0-9_-]{3,}))\b", "openai_value", "OpenAI-style key"),
     (r"\b(ghp_[A-Za-z0-9]{20,})\b", "github_ghp", "GitHub token"),
     (r"\b(github_pat_[A-Za-z0-9_]{20,})\b", "github_pat", "GitHub fine-grained token"),
     (r"\b(AIza[0-9A-Za-z_-]{20,})\b", "google_api_key", "Google API key"),
@@ -165,7 +165,7 @@ def scan(file_path: str) -> List[Finding]:
 
         rule_suffix, title_name, matched_value = value_match
 
-        if _is_false_positive(matched_value):
+        if _is_false_positive(matched_value) and not _is_demo_or_test_value(matched_value):
             continue
 
         severity = _severity_for_value(matched_value)

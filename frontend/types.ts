@@ -14,8 +14,24 @@ export interface Finding {
     recommendation: string;
 }
 
+export interface ScanSummary {
+    total: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    score: number;
+}
+
 export interface ScanResponse {
+    summary: ScanSummary;
     findings: Finding[];
+}
+
+export interface ExplainResponse {
+    explanation: string;
+    attack_scenario: string;
+    fix_details: string;
 }
 
 export interface ScanError {

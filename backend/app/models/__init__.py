@@ -1,4 +1,22 @@
 """Models package."""
-from .finding import Finding, Severity, Category
+from .finding import (
+    ExplainFinding,
+    ExplainRequest,
+    ExplainResponse,
+    Finding,
+    ScanResponse,
+    ScanSummary,
+    Severity,
+    Category,
+)
 
-__all__ = ["Finding", "Severity", "Category"]
+__all__ = [
+    "ExplainFinding",
+    "ExplainRequest",
+    "ExplainResponse",
+    "Finding",
+    "ScanResponse",
+    "ScanSummary",
+    "Severity",
+    "Category",
+]

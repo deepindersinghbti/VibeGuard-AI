@@ -61,7 +61,30 @@ A static security scanner for source code that detects hardcoded secrets, danger
    pip install -e ".[dev]"
    ```
 
-2. **Run the backend** (development server on port 8000):
+2. **Configure Gemini for AI explanations**:
+   ```bash
+   copy .env.example .env
+   ```
+
+   Add your real key to `backend/.env`:
+   ```env
+   GEMINI_API_KEY=your_real_gemini_api_key
+   GEMINI_MODEL=gemini-2.5-flash
+   ```
+
+   You can also set the key in your shell before starting the backend:
+   ```bash
+   $env:GEMINI_API_KEY="your_real_gemini_api_key"
+   ```
+
+   Optional:
+   ```bash
+   $env:GEMINI_MODEL="gemini-2.5-flash"
+   ```
+
+   Do not put this key in `frontend/.env.example` or any `NEXT_PUBLIC_*` variable.
+
+3. **Run the backend** (development server on port 8000):
    ```bash
    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
    ```

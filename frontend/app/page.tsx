@@ -3,13 +3,14 @@
 import React, { useState } from "react";
 import { uploadZipFile } from "../lib/api";
 import ScanResults from "../components/ScanResults";
-import { Finding } from "../types";
+import { Finding, ScanSummary } from "../types";
 
 export default function Home() {
     const [file, setFile] = useState<File | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [findings, setFindings] = useState<Finding[]>([]);
+    const [summary, setSummary] = useState<ScanSummary | null>(null);
     const [scanned, setScanned] = useState(false);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -33,11 +34,13 @@ export default function Home() {
 
         setLoading(true);
         setError(null);
+        setSummary(null);
         setScanned(false);
 
         try {
             const results = await uploadZipFile(file);
-            setFindings(results);
+            setFindings(results.findings);
+            setSummary(results.summary);
             setScanned(true);
         } catch (err) {
             setError(
@@ -110,7 +113,9 @@ export default function Home() {
                     )}
 
                     {/* Results */}
-                    {scanned && !error && <ScanResults findings={findings} />}
+                    {scanned && !error && summary && (
+                        <ScanResults summary={summary} findings={findings} />
+                    )}
                 </div>
 
                 {/* Info Section */}

@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 from typing import List
-from app.models import Finding, Severity
+from app.models import Finding, ScanSummary, Severity
 from app.services.zip_handler import should_skip_file
 from app.scanners import secrets, javascript, python, config
 
@@ -21,6 +21,47 @@ SCANNER_MAP = {
     ".toml": config.scan,
     ".ini": config.scan,
 }
+
+RISK_WEIGHTS = {
+    Severity.CRITICAL: 40,
+    Severity.HIGH: 20,
+    Severity.MEDIUM: 10,
+    Severity.LOW: 5,
+}
+
+
+def _scanner_key(filename: str) -> str:
+    """Return the scanner map key for a file name."""
+    name = Path(filename).name.lower()
+    if name == ".env" or name.startswith(".env."):
+        return ".env"
+    return Path(filename).suffix.lower()
+
+
+def generate_summary(findings: List[Finding]) -> ScanSummary:
+    """Generate severity counts and score for scan findings."""
+    counts = {
+        Severity.CRITICAL: 0,
+        Severity.HIGH: 0,
+        Severity.MEDIUM: 0,
+        Severity.LOW: 0,
+    }
+
+    for finding in findings:
+        severity = Severity(finding.severity)
+        counts[severity] += 1
+
+    deduction = sum(counts[severity] * weight for severity, weight in RISK_WEIGHTS.items())
+    score = max(0, min(100, 100 - deduction))
+
+    return ScanSummary(
+        total=len(findings),
+        critical=counts[Severity.CRITICAL],
+        high=counts[Severity.HIGH],
+        medium=counts[Severity.MEDIUM],
+        low=counts[Severity.LOW],
+        score=score,
+    )
 
 
 def _severity_sort_key(finding: Finding) -> tuple:
@@ -84,14 +125,14 @@ def scan_directory(extract_dir: str) -> List[Finding]:
             except Exception:
                 continue
             
-            # Get file extension
-            ext = Path(filename).suffix.lower()
+            # Get scanner key
+            scanner_key = _scanner_key(filename)
             
             # Run all applicable scanners
             try:
                 # Run extension-specific scanner
-                if ext in SCANNER_MAP:
-                    scanner_func = SCANNER_MAP[ext]
+                if scanner_key in SCANNER_MAP:
+                    scanner_func = SCANNER_MAP[scanner_key]
                     file_findings = scanner_func(file_path)
                     
                     # Normalize file paths to use forward slashes and relative paths
@@ -111,7 +152,7 @@ def scan_directory(extract_dir: str) -> List[Finding]:
                             seen_findings.add(dedup_key)
                 
                 # Always run secrets scanner for supported text files
-                if ext in {".js", ".jsx", ".ts", ".tsx", ".py", ".json", ".yml", ".yaml", ".toml", ".ini", ".env"}:
+                if scanner_key in {".js", ".jsx", ".ts", ".tsx", ".py", ".json", ".yml", ".yaml", ".toml", ".ini", ".env"}:
                     secret_findings = secrets.scan(file_path)
                     for finding in secret_findings:
                         finding.file = rel_path.replace("\\", "/")

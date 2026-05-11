@@ -3,7 +3,8 @@ import pytest
 import tempfile
 import os
 from app.scanners import secrets, javascript, python, config
-from app.models import Severity, Category
+from app.models import Finding, Severity, Category
+from app.services.scanner import generate_summary, scan_directory
 
 
 class TestSecretsScanner:
@@ -143,6 +144,22 @@ fake_key = "sk-proj-fakeSecretValue123"
             findings = secrets.scan(temp_name)
             assert any("OpenAI-style key" in finding.title for finding in findings)
             assert all(finding.severity in {Severity.MEDIUM, Severity.LOW} for finding in findings)
+            assert not any(finding.severity == Severity.CRITICAL for finding in findings)
+        finally:
+            os.unlink(temp_name)
+
+    def test_detect_short_sk_test_value_as_non_critical(self):
+        """Test that short sk_test_ values are detected but downgraded."""
+        content = 'key = "sk_test_abc"\n'
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(content)
+            f.flush()
+            temp_name = f.name
+
+        try:
+            findings = secrets.scan(temp_name)
+            assert any("OpenAI-style key" in finding.title for finding in findings)
+            assert any(finding.severity in {Severity.MEDIUM, Severity.LOW} for finding in findings)
             assert not any(finding.severity == Severity.CRITICAL for finding in findings)
         finally:
             os.unlink(temp_name)
@@ -298,17 +315,14 @@ class TestConfigScanner:
     
     def test_detect_env_file(self):
         """Test detection of .env file."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
-            f.write("DATABASE_URL=postgres://user:pass@localhost/db\n")
-            f.flush()
-            temp_name = f.name
-        
-        try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_name = os.path.join(temp_dir, ".env")
+            with open(temp_name, "w", encoding="utf-8") as f:
+                f.write("DATABASE_URL=postgres://user:pass@localhost/db\n")
+
             findings = config.scan(temp_name)
             assert any(".env" in f.title for f in findings)
             assert any(f.category == Category.EXPOSURE for f in findings)
-        finally:
-            os.unlink(temp_name)
     
     def test_detect_cors_wildcard(self, sample_cors_wildcard_file):
         """Test detection of CORS allow_origins=["*"]."""
@@ -326,14 +340,122 @@ class TestConfigScanner:
     
     def test_detect_next_public_secret(self, sample_next_public_secret_file):
         """Test detection of NEXT_PUBLIC_ secrets."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".env", delete=False) as f:
-            f.write(sample_next_public_secret_file)
-            f.flush()
-            temp_name = f.name
-        
-        try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_name = os.path.join(temp_dir, ".env")
+            with open(temp_name, "w", encoding="utf-8") as f:
+                f.write(sample_next_public_secret_file)
+
             findings = config.scan(temp_name)
             assert any("NEXT_PUBLIC_" in f.evidence for f in findings)
             assert any(f.category == Category.EXPOSURE for f in findings)
-        finally:
-            os.unlink(temp_name)
+
+
+class TestScannerOrchestrator:
+    """Tests for scanner orchestration across real project files."""
+
+    def test_scan_directory_includes_root_env_file(self):
+        """Test that root .env files are not skipped as extensionless files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_path = os.path.join(temp_dir, ".env")
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write("NEXT_PUBLIC_GEMINI_API_KEY=secret123\n")
+
+            findings = scan_directory(temp_dir)
+
+            assert any(finding.rule_id == "CONFIG_ENV_FILE" for finding in findings)
+            assert any(finding.rule_id == "CONFIG_NEXT_PUBLIC_API_KEY" for finding in findings)
+
+    def test_scan_directory_detects_sk_test_value(self):
+        """Test that value-based scanning runs and downgrades sk_test_ values."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            py_path = os.path.join(temp_dir, "config.py")
+            with open(py_path, "w", encoding="utf-8") as f:
+                f.write('key = "sk_test_abc"\n')
+
+            findings = scan_directory(temp_dir)
+
+            value_findings = [
+                finding for finding in findings
+                if finding.rule_id == "SECRETS_VALUE_OPENAI_VALUE"
+            ]
+            assert value_findings
+            assert all(finding.severity in {Severity.MEDIUM, Severity.LOW} for finding in value_findings)
+
+
+class TestScanSummary:
+    """Tests for scan summary and risk scoring."""
+
+    def _finding(self, severity: Severity) -> Finding:
+        return Finding(
+            rule_id=f"TEST_{severity.value.upper()}",
+            title="Test finding",
+            severity=severity,
+            category=Category.SECRETS,
+            file="test.py",
+            line=1,
+            evidence="test",
+            recommendation="fix it",
+        )
+
+    def test_summary_counts_match_findings(self):
+        """Test summary counts by severity."""
+        findings = [
+            self._finding(Severity.CRITICAL),
+            self._finding(Severity.CRITICAL),
+            self._finding(Severity.HIGH),
+            self._finding(Severity.MEDIUM),
+            self._finding(Severity.LOW),
+        ]
+
+        summary = generate_summary(findings)
+
+        assert summary.total == 5
+        assert summary.critical == 2
+        assert summary.high == 1
+        assert summary.medium == 1
+        assert summary.low == 1
+
+    def test_summary_score_calculation(self):
+        """Test weighted score calculation."""
+        findings = [
+            self._finding(Severity.CRITICAL),
+            self._finding(Severity.HIGH),
+            self._finding(Severity.MEDIUM),
+            self._finding(Severity.LOW),
+        ]
+
+        summary = generate_summary(findings)
+
+        assert summary.score == 25
+
+    def test_summary_no_findings_score_is_100(self):
+        """Test empty scans keep a perfect score."""
+        summary = generate_summary([])
+
+        assert summary.total == 0
+        assert summary.score == 100
+
+    def test_summary_only_low_findings_small_deduction(self):
+        """Test low findings have a small score impact."""
+        findings = [
+            self._finding(Severity.LOW),
+            self._finding(Severity.LOW),
+        ]
+
+        summary = generate_summary(findings)
+
+        assert summary.low == 2
+        assert summary.score == 90
+
+    def test_summary_many_critical_clamps_to_zero(self):
+        """Test score cannot go below zero."""
+        findings = [
+            self._finding(Severity.CRITICAL),
+            self._finding(Severity.CRITICAL),
+            self._finding(Severity.CRITICAL),
+        ]
+
+        summary = generate_summary(findings)
+
+        assert summary.critical == 3
+        assert summary.score == 0

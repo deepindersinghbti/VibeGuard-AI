@@ -1,10 +1,10 @@
 // API client for backend communication.
 
-import { Finding, ScanError } from "../types";
+import { ExplainResponse, Finding, ScanError, ScanResponse } from "../types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-export async function uploadZipFile(file: File): Promise<Finding[]> {
+export async function uploadZipFile(file: File): Promise<ScanResponse> {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -18,6 +18,27 @@ export async function uploadZipFile(file: File): Promise<Finding[]> {
         throw new Error(error.detail || "Failed to scan ZIP file");
     }
 
-    const findings: Finding[] = await response.json();
-    return findings;
+    const scanResponse: ScanResponse = await response.json();
+    return scanResponse;
+}
+
+export async function explainFinding(finding: Finding): Promise<ExplainResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/explain`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ finding }),
+    });
+
+    if (!response.ok) {
+        return {
+            explanation: "AI explanation is currently unavailable. Refer to the recommendation above.",
+            attack_scenario: "",
+            fix_details: "",
+        };
+    }
+
+    const explanation: ExplainResponse = await response.json();
+    return explanation;
 }
