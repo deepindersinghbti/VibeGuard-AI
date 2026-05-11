@@ -3,6 +3,7 @@
 import React from "react";
 import { explainFinding } from "../lib/api";
 import { ExplainResponse, Finding, ScanSummary, Severity } from "../types";
+import { MarkdownContent } from "./MarkdownContent";
 
 interface ScanResultsProps {
     summary: ScanSummary;
@@ -255,7 +256,9 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
 
                                             <div className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                                                 <p className="font-semibold text-slate-900">Fix recommendation</p>
-                                                <p className="mt-1">{finding.recommendation}</p>
+                                                <div className="mt-1">
+                                                    <MarkdownContent content={finding.recommendation} />
+                                                </div>
                                             </div>
 
                                             {isOpen && (
@@ -279,16 +282,22 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                                                 <p className="font-semibold text-slate-900">
                                                                     Why this is dangerous
                                                                 </p>
-                                                                <p className="mt-1">{explanation.explanation}</p>
+                                                                <div className="mt-1">
+                                                                    <MarkdownContent
+                                                                        content={explanation.explanation}
+                                                                    />
+                                                                </div>
                                                             </div>
                                                             {explanation.attack_scenario && (
                                                                 <div>
                                                                     <p className="font-semibold text-slate-900">
                                                                         Attack scenario
                                                                     </p>
-                                                                    <p className="mt-1">
-                                                                        {explanation.attack_scenario}
-                                                                    </p>
+                                                                    <div className="mt-1">
+                                                                        <MarkdownContent
+                                                                            content={explanation.attack_scenario}
+                                                                        />
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             {explanation.fix_details && (
@@ -296,7 +305,11 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                                                     <p className="font-semibold text-slate-900">
                                                                         How to fix it
                                                                     </p>
-                                                                    <p className="mt-1">{explanation.fix_details}</p>
+                                                                    <div className="mt-1">
+                                                                        <MarkdownContent
+                                                                            content={explanation.fix_details}
+                                                                        />
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                         </div>
