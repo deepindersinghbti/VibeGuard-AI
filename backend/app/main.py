@@ -14,16 +14,29 @@ app = FastAPI(
 )
 
 def get_allowed_origins() -> list[str]:
-    """Return allowed CORS origins for local and deployed frontends."""
+    """
+    Return allowed CORS origins for local and deployed frontends.
+    
+    Reads from CORS_ORIGINS environment variable (comma-separated).
+    Always includes localhost origins for local development.
+    
+    Example:
+        CORS_ORIGINS=http://localhost:3000,https://vibeguard-five.vercel.app
+    """
+    # Always allow localhost for local development
     origins = [
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:3000",
     ]
 
-    frontend_url = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
-    if frontend_url:
-        origins.append(frontend_url)
+    # Add any configured origins from env var (comma-separated)
+    cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
+    if cors_origins_env:
+        for origin in cors_origins_env.split(","):
+            origin = origin.strip()
+            if origin and origin not in origins:
+                origins.append(origin)
 
     return origins
 
