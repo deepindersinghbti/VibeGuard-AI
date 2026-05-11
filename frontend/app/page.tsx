@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { scanGitHubRepo, uploadZipFile } from "../lib/api";
 import ScanResults from "../components/ScanResults";
 import { Finding, ScanSummary } from "../types";
@@ -12,6 +12,7 @@ export default function Home() {
     const [file, setFile] = useState<File | null>(null);
     const [repoUrl, setRepoUrl] = useState("");
     const [loading, setLoading] = useState(false);
+    const [showColdStartHint, setShowColdStartHint] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [findings, setFindings] = useState<Finding[]>([]);
     const [summary, setSummary] = useState<ScanSummary | null>(null);
@@ -68,6 +69,13 @@ export default function Home() {
             setFindings(results.findings);
             setSummary(results.summary);
             setScanned(true);
+            try {
+                if (typeof window !== "undefined") {
+                    sessionStorage.setItem("vg_cold_start_shown", "1");
+                }
+            } catch (e) {
+                // ignore sessionStorage errors
+            }
         } catch (err) {
             setError(
                 err instanceof Error ? err.message : "An error occurred during scanning"
@@ -77,6 +85,42 @@ export default function Home() {
             setLoading(false);
         }
     };
+
+    const coldStartTimerRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        // Only run client-side
+        if (typeof window === "undefined") return;
+
+        // If loading starts and we haven't recorded a successful backend response this session,
+        // start a delayed timer to show a helpful cold-start hint.
+        if (loading) {
+            try {
+                const alreadyShown = sessionStorage.getItem("vg_cold_start_shown");
+                if (!alreadyShown) {
+                    coldStartTimerRef.current = window.setTimeout(() => {
+                        setShowColdStartHint(true);
+                    }, 3500);
+                }
+            } catch (e) {
+                // ignore sessionStorage access errors
+            }
+        } else {
+            // loading finished: clear any pending timer and hide the hint immediately
+            if (coldStartTimerRef.current) {
+                clearTimeout(coldStartTimerRef.current);
+                coldStartTimerRef.current = null;
+            }
+            setShowColdStartHint(false);
+        }
+
+        return () => {
+            if (coldStartTimerRef.current) {
+                clearTimeout(coldStartTimerRef.current);
+                coldStartTimerRef.current = null;
+            }
+        };
+    }, [loading]);
 
     const loadingText =
         scanMode === "github" ? "Scanning repository..." : "Analyzing files...";
@@ -113,11 +157,10 @@ export default function Home() {
                                 type="button"
                                 onClick={() => handleModeChange("zip")}
                                 disabled={loading}
-                                className={`rounded px-4 py-2 text-sm font-semibold transition ${
-                                    scanMode === "zip"
+                                className={`rounded px-4 py-2 text-sm font-semibold transition ${scanMode === "zip"
                                         ? "bg-white text-blue-700 shadow-sm"
                                         : "text-slate-600 hover:text-slate-950"
-                                } disabled:cursor-not-allowed disabled:opacity-50`}
+                                    } disabled:cursor-not-allowed disabled:opacity-50`}
                             >
                                 Upload ZIP
                             </button>
@@ -125,11 +168,10 @@ export default function Home() {
                                 type="button"
                                 onClick={() => handleModeChange("github")}
                                 disabled={loading}
-                                className={`rounded px-4 py-2 text-sm font-semibold transition ${
-                                    scanMode === "github"
+                                className={`rounded px-4 py-2 text-sm font-semibold transition ${scanMode === "github"
                                         ? "bg-white text-blue-700 shadow-sm"
                                         : "text-slate-600 hover:text-slate-950"
-                                } disabled:cursor-not-allowed disabled:opacity-50`}
+                                    } disabled:cursor-not-allowed disabled:opacity-50`}
                             >
                                 GitHub URL
                             </button>
@@ -200,6 +242,12 @@ export default function Home() {
                     {loading && (
                         <div className="mt-5 rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-900">
                             {loadingText} This may take a moment for larger projects.
+                        </div>
+                    )}
+                    {showColdStartHint && (
+                        <div className="mt-3 rounded-md bg-white px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-100">
+                            <p className="font-medium">Waking up the scanner...</p>
+                            <p className="mt-1 text-sm text-slate-600">The backend may take a few seconds to start because it is hosted on Render. This usually happens only on the first scan after inactivity.</p>
                         </div>
                     )}
                 </section>
