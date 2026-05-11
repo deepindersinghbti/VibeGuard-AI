@@ -3,7 +3,6 @@
  **/
 const nextConfig = {
     reactStrictMode: true,
-    swcMinify: true,
     typescript: {
         tsconfigPath: "tsconfig.next.json",
     },
