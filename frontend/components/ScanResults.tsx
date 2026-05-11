@@ -242,8 +242,8 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                                     {isLoading
                                                         ? "Generating explanation..."
                                                         : explanation
-                                                          ? "Explanation generated"
-                                                          : "Explain"}
+                                                            ? "Explanation generated"
+                                                            : "Explain"}
                                                 </button>
                                             </div>
 
