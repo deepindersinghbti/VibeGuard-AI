@@ -2,13 +2,28 @@
 
 import { ExplainResponse, Finding, ScanError, ScanResponse } from "../types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const DEFAULT_API_BASE_URL = "http://localhost:8000";
+
+function getApiBaseUrl(): string {
+    const configuredUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+
+    if (configuredUrl) {
+        return configuredUrl;
+    }
+
+    if (process.env.NODE_ENV === "production") {
+        throw new Error("NEXT_PUBLIC_API_BASE_URL is required in production.");
+    }
+
+    return DEFAULT_API_BASE_URL;
+}
 
 export async function uploadZipFile(file: File): Promise<ScanResponse> {
     const formData = new FormData();
     formData.append("file", file);
+    const apiBaseUrl = getApiBaseUrl();
 
-    const response = await fetch(`${API_BASE_URL}/api/v1/scan/zip`, {
+    const response = await fetch(`${apiBaseUrl}/api/v1/scan/zip`, {
         method: "POST",
         body: formData,
     });
@@ -23,7 +38,8 @@ export async function uploadZipFile(file: File): Promise<ScanResponse> {
 }
 
 export async function scanGitHubRepo(repoUrl: string): Promise<ScanResponse> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/scan/github`, {
+    const apiBaseUrl = getApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/api/v1/scan/github`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -42,7 +58,8 @@ export async function scanGitHubRepo(repoUrl: string): Promise<ScanResponse> {
 
 export async function explainFinding(finding: Finding): Promise<ExplainResponse> {
     const { rule_id, title, severity, file, line, evidence, recommendation } = finding;
-    const response = await fetch(`${API_BASE_URL}/api/v1/explain`, {
+    const apiBaseUrl = getApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/api/v1/explain`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
