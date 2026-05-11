@@ -136,31 +136,38 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
     const [explanations, setExplanations] = React.useState<Record<string, ExplainResponse>>({});
     const [loadingExplanations, setLoadingExplanations] = React.useState<Record<string, boolean>>({});
     const [openExplanations, setOpenExplanations] = React.useState<Record<string, boolean>>({});
+    const [explanationErrors, setExplanationErrors] = React.useState<Record<string, string>>({});
 
     const findingKey = (finding: Finding, idx: number) =>
         `${finding.rule_id}:${finding.file}:${finding.line}:${idx}`;
 
     const handleExplain = async (finding: Finding, key: string) => {
+        // Open explanation panel
         setOpenExplanations((current) => ({ ...current, [key]: true }));
 
-        if (loadingExplanations[key] || explanations[key]) {
+        // Clear any previous error for this issue
+        setExplanationErrors((current) => {
+            const updated = { ...current };
+            delete updated[key];
+            return updated;
+        });
+
+        // Exit early if already loading
+        if (loadingExplanations[key]) {
             return;
         }
 
+        // Set loading state
         setLoadingExplanations((current) => ({ ...current, [key]: true }));
         try {
             const explanation = await explainFinding(finding);
+            // Only set explanation if it's valid
             setExplanations((current) => ({ ...current, [key]: explanation }));
-        } catch {
-            setExplanations((current) => ({
-                ...current,
-                [key]: {
-                    explanation:
-                        "AI explanation is currently unavailable. Refer to the recommendation above.",
-                    attack_scenario: "",
-                    fix_details: "",
-                },
-            }));
+        } catch (error) {
+            // Store error message for this specific issue
+            const errorMessage = error instanceof Error ? error.message : "Couldn't generate explanation. Please try again.";
+            setExplanationErrors((current) => ({ ...current, [key]: errorMessage }));
+            // Do NOT set explanations state on error
         } finally {
             setLoadingExplanations((current) => ({ ...current, [key]: false }));
         }
@@ -213,6 +220,8 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                     const explanation = explanations[key];
                                     const isLoading = loadingExplanations[key];
                                     const isOpen = openExplanations[key];
+                                    const error = explanationErrors[key];
+                                    const hasError = Boolean(error);
 
                                     return (
                                         <article
@@ -235,18 +244,27 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                                         {finding.title}
                                                     </h4>
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleExplain(finding, key)}
-                                                    disabled={isLoading || Boolean(explanation)}
-                                                    className="inline-flex h-9 items-center justify-center rounded-md border border-slate-700 bg-slate-950 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-900 hover:shadow disabled:cursor-not-allowed disabled:border-slate-400 disabled:bg-slate-400"
-                                                >
-                                                    {isLoading
-                                                        ? "Generating explanation..."
-                                                        : explanation
-                                                            ? "Explanation generated"
-                                                            : "Explain"}
-                                                </button>
+                                                <div className="flex flex-col gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleExplain(finding, key)}
+                                                        disabled={isLoading}
+                                                        className="inline-flex h-9 items-center justify-center rounded-md border border-slate-700 bg-slate-950 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-900 hover:shadow disabled:cursor-not-allowed disabled:border-slate-400 disabled:bg-slate-400"
+                                                    >
+                                                        {isLoading
+                                                            ? "Explaining..."
+                                                            : hasError
+                                                                ? "Try Again"
+                                                                : explanation
+                                                                    ? "Regenerate"
+                                                                    : "Explain"}
+                                                    </button>
+                                                    {hasError && (
+                                                        <p className="text-xs text-red-600 flex items-center gap-1">
+                                                            ⚠ {error}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             <div className="mt-4 rounded-lg bg-slate-950 p-4 text-sm text-slate-100">

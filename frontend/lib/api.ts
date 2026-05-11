@@ -70,13 +70,28 @@ export async function explainFinding(finding: Finding): Promise<ExplainResponse>
     });
 
     if (!response.ok) {
-        return {
-            explanation: "AI explanation is currently unavailable. Refer to the recommendation above.",
-            attack_scenario: "",
-            fix_details: "",
-        };
+        let errorMessage = "Couldn't generate explanation. Please try again.";
+        try {
+            const errorData = await response.json();
+            if (errorData.detail) {
+                errorMessage = errorData.detail;
+            } else if (errorData.error) {
+                errorMessage = errorData.error;
+            } else if (errorData.message) {
+                errorMessage = errorData.message;
+            }
+        } catch {
+            // If response is not JSON or parsing fails, use default message
+        }
+        throw new Error(errorMessage);
     }
 
     const explanation: ExplainResponse = await response.json();
+
+    // Validate that the explanation response has required fields
+    if (!explanation.explanation || typeof explanation.explanation !== "string") {
+        throw new Error("Invalid explanation response from server. Please try again.");
+    }
+
     return explanation;
 }
