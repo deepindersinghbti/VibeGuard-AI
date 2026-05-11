@@ -117,6 +117,16 @@ Give:
 2. A simple attack scenario
 3. How to fix it step-by-step
 
+CRITICAL FORMATTING RULES:
+- Do NOT put multiple numbered list items on the same line.
+- Each numbered step MUST start on a new line.
+- Do NOT return "1. item 2. item 3. item" in one paragraph.
+- If returning a numbered list, use format:
+  1. First step here.
+  2. Second step here.
+  3. Third step here.
+- Each item in a numbered list MUST have its own line.
+
 Keep it simple and practical.
 Do not repeat the input.
 Return valid JSON only with these string keys: explanation, attack_scenario, fix_details.

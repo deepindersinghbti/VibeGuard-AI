@@ -2,6 +2,7 @@
 
 import React from "react";
 import { explainFinding } from "../lib/api";
+import { normalizeExplanation } from "../lib/normalizeExplanation";
 import { ExplainResponse, Finding, ScanSummary, Severity } from "../types";
 import { MarkdownContent } from "./MarkdownContent";
 
@@ -257,7 +258,7 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                             <div className="mt-4 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
                                                 <p className="font-semibold text-slate-900">Fix recommendation</p>
                                                 <div className="mt-1">
-                                                    <MarkdownContent content={finding.recommendation} />
+                                                    <MarkdownContent content={normalizeExplanation(finding.recommendation)} />
                                                 </div>
                                             </div>
 
@@ -284,7 +285,7 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                                                 </p>
                                                                 <div className="mt-1">
                                                                     <MarkdownContent
-                                                                        content={explanation.explanation}
+                                                                        content={normalizeExplanation(explanation.explanation)}
                                                                     />
                                                                 </div>
                                                             </div>
@@ -295,7 +296,7 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                                                     </p>
                                                                     <div className="mt-1">
                                                                         <MarkdownContent
-                                                                            content={explanation.attack_scenario}
+                                                                            content={normalizeExplanation(explanation.attack_scenario)}
                                                                         />
                                                                     </div>
                                                                 </div>
@@ -307,7 +308,7 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                                                     </p>
                                                                     <div className="mt-1">
                                                                         <MarkdownContent
-                                                                            content={explanation.fix_details}
+                                                                            content={normalizeExplanation(explanation.fix_details)}
                                                                         />
                                                                     </div>
                                                                 </div>
