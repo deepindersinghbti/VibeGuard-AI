@@ -30,19 +30,34 @@ export default function Home() {
         }
     };
 
+    const resetResults = () => {
+        setError(null);
+        setSummary(null);
+        setFindings([]);
+        setScanned(false);
+    };
+
+    const handleModeChange = (mode: ScanMode) => {
+        setScanMode(mode);
+        resetResults();
+    };
+
     const handleScan = async () => {
         if (scanMode === "zip" && !file) {
             setError("Please select a file first");
+            setScanned(true);
             return;
         }
         if (scanMode === "github" && !repoUrl.trim()) {
             setError("Please enter a GitHub repository URL");
+            setScanned(true);
             return;
         }
 
         setLoading(true);
         setError(null);
         setSummary(null);
+        setFindings([]);
         setScanned(false);
 
         try {
@@ -63,68 +78,89 @@ export default function Home() {
         }
     };
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4">
-            <div className="max-w-4xl mx-auto">
-                {/* Header */}
-                <div className="text-center mb-12">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-2">VibeGuard AI</h1>
-                    <p className="text-xl text-gray-600">
-                        Static Security Scanner for Source Code
-                    </p>
-                </div>
+    const loadingText =
+        scanMode === "github" ? "Scanning repository..." : "Analyzing files...";
 
-                {/* Main Card */}
-                <div className="bg-white rounded-lg shadow-lg p-8 mb-8">
-                    {/* Upload Section */}
-                    <div className="mb-8">
-                        <div className="mb-6 flex rounded border border-gray-200 overflow-hidden">
+    return (
+        <main className="min-h-screen bg-slate-50 text-slate-950">
+            <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+                <header className="mb-8">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-blue-700">
+                                VibeGuard AI
+                            </p>
+                            <h1 className="text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+                                Static Security Scanner for Code
+                            </h1>
+                            <p className="mt-3 max-w-2xl text-base text-slate-600">
+                                Scan source code for secrets, dangerous patterns, and risky configuration before it ships.
+                            </p>
+                        </div>
+                    </div>
+                </header>
+
+                <section className="mb-8 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+                    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="text-lg font-semibold text-slate-950">Choose Scan Source</h2>
+                            <p className="mt-1 text-sm text-slate-600">
+                                Upload a ZIP or scan a public GitHub repository.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-2 rounded-md bg-slate-100 p-1">
                             <button
                                 type="button"
-                                onClick={() => setScanMode("zip")}
+                                onClick={() => handleModeChange("zip")}
                                 disabled={loading}
-                                className={`flex-1 px-4 py-2 text-sm font-semibold ${
+                                className={`rounded px-4 py-2 text-sm font-semibold transition ${
                                     scanMode === "zip"
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-white text-gray-700 hover:bg-gray-50"
-                                } disabled:opacity-50`}
+                                        ? "bg-white text-blue-700 shadow-sm"
+                                        : "text-slate-600 hover:text-slate-950"
+                                } disabled:cursor-not-allowed disabled:opacity-50`}
                             >
                                 Upload ZIP
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setScanMode("github")}
+                                onClick={() => handleModeChange("github")}
                                 disabled={loading}
-                                className={`flex-1 px-4 py-2 text-sm font-semibold ${
+                                className={`rounded px-4 py-2 text-sm font-semibold transition ${
                                     scanMode === "github"
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-white text-gray-700 hover:bg-gray-50"
-                                } disabled:opacity-50`}
+                                        ? "bg-white text-blue-700 shadow-sm"
+                                        : "text-slate-600 hover:text-slate-950"
+                                } disabled:cursor-not-allowed disabled:opacity-50`}
                             >
                                 GitHub URL
                             </button>
                         </div>
+                    </div>
 
-                        {scanMode === "zip" && (
-                            <label className="block mb-4">
-                                <span className="text-lg font-semibold text-gray-700 block mb-4">
-                                    Upload a ZIP file to scan
-                                </span>
+                    <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                        {scanMode === "zip" ? (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-700">
+                                    ZIP file
+                                </label>
                                 <input
                                     type="file"
                                     accept=".zip"
                                     onChange={handleFileChange}
                                     disabled={loading}
-                                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
+                                    className="block w-full text-sm text-slate-600 file:mr-4 file:rounded file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
                                 />
-                            </label>
-                        )}
-
-                        {scanMode === "github" && (
-                            <label className="block mb-4">
-                                <span className="text-lg font-semibold text-gray-700 block mb-4">
-                                    Public GitHub repository URL
-                                </span>
+                                {file && (
+                                    <p className="mt-2 text-sm text-slate-600">
+                                        Selected: <span className="font-medium text-slate-900">{file.name}</span>{" "}
+                                        ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-slate-700">
+                                    Public GitHub repository
+                                </label>
                                 <input
                                     type="url"
                                     value={repoUrl}
@@ -134,16 +170,8 @@ export default function Home() {
                                     }}
                                     disabled={loading}
                                     placeholder="https://github.com/owner/repo"
-                                    className="block w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-900 disabled:opacity-50"
+                                    className="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100 disabled:opacity-70"
                                 />
-                            </label>
-                        )}
-
-                        {scanMode === "zip" && file && (
-                            <div className="mb-4 p-3 bg-blue-50 rounded border border-blue-200">
-                                <p className="text-sm text-blue-900">
-                                    <strong>Selected:</strong> {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                                </p>
                             </div>
                         )}
 
@@ -154,55 +182,39 @@ export default function Home() {
                                 (scanMode === "zip" && !file) ||
                                 (scanMode === "github" && !repoUrl.trim())
                             }
-                            className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                            className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400 lg:min-w-52"
                         >
                             {loading ? (
                                 <>
-                                    <span className="inline-block animate-spin mr-2">⏳</span>
-                                    Scanning...
+                                    <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                    {loadingText}
                                 </>
+                            ) : scanMode === "zip" ? (
+                                "Scan ZIP File"
                             ) : (
-                                scanMode === "zip" ? "Scan ZIP File" : "Scan GitHub Repository"
+                                "Scan Repository"
                             )}
                         </button>
                     </div>
 
-                    {/* Error Display */}
-                    {error && scanned && (
-                        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded">
-                            <p className="text-red-900 font-semibold">Error:</p>
-                            <p className="text-red-700 text-sm mt-1">{error}</p>
+                    {loading && (
+                        <div className="mt-5 rounded-md bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                            {loadingText} This may take a moment for larger projects.
                         </div>
                     )}
+                </section>
 
-                    {/* Results */}
-                    {scanned && !error && summary && (
-                        <ScanResults summary={summary} findings={findings} />
-                    )}
-                </div>
+                {error && scanned && (
+                    <section className="mb-8 rounded-lg bg-red-50 p-4 text-sm ring-1 ring-red-200">
+                        <p className="font-semibold text-red-900">Scan failed</p>
+                        <p className="mt-1 text-red-700">{error}</p>
+                    </section>
+                )}
 
-                {/* Info Section */}
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">About</h3>
-                    <ul className="space-y-2 text-sm text-gray-700">
-                        <li>
-                            ✓ Detects hardcoded API keys, secrets, and credentials
-                        </li>
-                        <li>
-                            ✓ Identifies dangerous code patterns (eval, exec, shell commands)
-                        </li>
-                        <li>
-                            ✓ Flags CORS misconfigurations and environment file exposure
-                        </li>
-                        <li>
-                            ✓ Scans Python, JavaScript, TypeScript, and configuration files
-                        </li>
-                        <li>
-                            ✓ Maximum file size: 25MB
-                        </li>
-                    </ul>
-                </div>
+                {scanned && !error && summary && (
+                    <ScanResults summary={summary} findings={findings} />
+                )}
             </div>
-        </div>
+        </main>
     );
 }
