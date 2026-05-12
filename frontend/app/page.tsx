@@ -7,6 +7,18 @@ import { Finding, ScanSummary } from "../types";
 
 type ScanMode = "zip" | "github";
 
+function formatFileSize(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+        return "0 KB";
+    }
+
+    if (bytes < 1024 * 1024) {
+        return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export default function Home() {
     const [scanMode, setScanMode] = useState<ScanMode>("zip");
     const [file, setFile] = useState<File | null>(null);
@@ -306,7 +318,7 @@ export default function Home() {
                                                 {file.name}
                                             </p>
                                             <p className="mt-1 text-xs text-slate-500">
-                                                {(file.size / 1024 / 1024).toFixed(2)} MB · Click or drop another ZIP to replace it
+                                                {formatFileSize(file.size)} · Click or drop another ZIP to replace it
                                             </p>
                                         </>
                                     ) : (
