@@ -7,6 +7,18 @@ import { Finding, ScanSummary } from "../types";
 
 type ScanMode = "zip" | "github";
 
+function formatFileSize(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+        return "0 KB";
+    }
+
+    if (bytes < 1024 * 1024) {
+        return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
 export default function Home() {
     const [scanMode, setScanMode] = useState<ScanMode>("zip");
     const [file, setFile] = useState<File | null>(null);
@@ -14,25 +26,108 @@ export default function Home() {
     const [loading, setLoading] = useState(false);
     const [showColdStartHint, setShowColdStartHint] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [fileError, setFileError] = useState<string | null>(null);
+    const [dragActive, setDragActive] = useState(false);
     const [findings, setFindings] = useState<Finding[]>([]);
     const [summary, setSummary] = useState<ScanSummary | null>(null);
     const [scanned, setScanned] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const dragDepthRef = useRef(0);
+
+    const isZipFile = (selectedFile: File) => {
+        const hasZipExtension = selectedFile.name.toLowerCase().endsWith(".zip");
+        const hasZipMimeType = [
+            "application/zip",
+            "application/x-zip-compressed",
+            "application/octet-stream",
+            "",
+        ].includes(selectedFile.type);
+
+        return hasZipExtension && hasZipMimeType;
+    };
+
+    const selectZipFile = (selectedFile?: File) => {
+        if (!selectedFile) {
+            return;
+        }
+
+        if (!isZipFile(selectedFile)) {
+            setFile(null);
+            setFileError("Please upload a .zip file.");
+            setError(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+            return;
+        }
+
+        setFile(selectedFile);
+        setFileError(null);
+        setError(null);
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFile = e.target.files?.[0];
-        if (selectedFile) {
-            if (selectedFile.name.toLowerCase().endsWith(".zip")) {
-                setFile(selectedFile);
-                setError(null);
-            } else {
-                setError("Please select a .zip file");
-                setFile(null);
-            }
+        selectZipFile(e.target.files?.[0]);
+    };
+
+    const openFilePicker = () => {
+        if (!loading) {
+            fileInputRef.current?.click();
         }
+    };
+
+    const handleDropzoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openFilePicker();
+        }
+    };
+
+    const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (loading) return;
+
+        dragDepthRef.current += 1;
+        setDragActive(true);
+    };
+
+    const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!loading) {
+            event.dataTransfer.dropEffect = "copy";
+            setDragActive(true);
+        }
+    };
+
+    const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (loading) return;
+
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) {
+            setDragActive(false);
+        }
+    };
+
+    const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragDepthRef.current = 0;
+        setDragActive(false);
+
+        if (loading) {
+            return;
+        }
+
+        selectZipFile(event.dataTransfer.files?.[0]);
     };
 
     const resetResults = () => {
         setError(null);
+        setFileError(null);
         setSummary(null);
         setFindings([]);
         setScanned(false);
@@ -125,6 +220,12 @@ export default function Home() {
     const loadingText =
         scanMode === "github" ? "Scanning repository..." : "Analyzing files...";
 
+    const zipDropzoneState = loading
+        ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-75"
+        : dragActive
+            ? "cursor-pointer border-blue-500 bg-blue-50 ring-2 ring-blue-100"
+            : "cursor-pointer border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/60";
+
     return (
         <main className="min-h-screen bg-slate-50 text-slate-950">
             <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -178,23 +279,65 @@ export default function Home() {
                         </div>
                     </div>
 
-                    <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                    <div className="grid gap-4">
                         {scanMode === "zip" ? (
                             <div>
                                 <label className="mb-2 block text-sm font-medium text-slate-700">
                                     ZIP file
                                 </label>
-                                <input
-                                    type="file"
-                                    accept=".zip"
-                                    onChange={handleFileChange}
-                                    disabled={loading}
-                                    className="block w-full text-sm text-slate-600 file:mr-4 file:rounded file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
-                                />
-                                {file && (
-                                    <p className="mt-2 text-sm text-slate-600">
-                                        Selected: <span className="font-medium text-slate-900">{file.name}</span>{" "}
-                                        ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                                <div
+                                    role="button"
+                                    tabIndex={loading ? -1 : 0}
+                                    aria-label="Upload ZIP file"
+                                    aria-disabled={loading}
+                                    onClick={openFilePicker}
+                                    onKeyDown={handleDropzoneKeyDown}
+                                    onDragEnter={handleDragEnter}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
+                                    className={`rounded-lg border-2 border-dashed px-5 py-7 text-center outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${zipDropzoneState}`}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".zip,application/zip,application/x-zip-compressed"
+                                        onChange={handleFileChange}
+                                        disabled={loading}
+                                        className="sr-only"
+                                    />
+                                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-sm font-bold text-blue-700 shadow-sm ring-1 ring-slate-200">
+                                        {loading ? "..." : "ZIP"}
+                                    </div>
+                                    {file ? (
+                                        <>
+                                            <p className="mt-4 text-sm font-semibold text-slate-950">
+                                                Selected file
+                                            </p>
+                                            <p className="mt-1 break-all text-sm font-medium text-blue-700">
+                                                {file.name}
+                                            </p>
+                                            <p className="mt-1 text-xs text-slate-500">
+                                                {formatFileSize(file.size)} · Click or drop another ZIP to replace it
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="mt-4 text-sm font-semibold text-slate-950">
+                                                {dragActive ? "Drop your ZIP file to upload" : "Drag & drop your ZIP file here"}
+                                            </p>
+                                            <p className="mt-1 text-sm text-slate-600">
+                                                or click to browse
+                                            </p>
+                                        </>
+                                    )}
+                                    <p className="mt-3 text-xs font-medium text-slate-500">
+                                        ZIP archives only
+                                    </p>
+                                </div>
+                                {fileError && (
+                                    <p className="mt-2 text-sm font-medium text-red-700">
+                                        {fileError}
                                     </p>
                                 )}
                             </div>
@@ -217,26 +360,28 @@ export default function Home() {
                             </div>
                         )}
 
-                        <button
-                            onClick={handleScan}
-                            disabled={
-                                loading ||
-                                (scanMode === "zip" && !file) ||
-                                (scanMode === "github" && !repoUrl.trim())
-                            }
-                            className="inline-flex h-11 items-center justify-center rounded-md bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-400 lg:min-w-52"
-                        >
-                            {loading ? (
-                                <>
-                                    <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                                    {loadingText}
-                                </>
-                            ) : scanMode === "zip" ? (
-                                "Scan ZIP File"
-                            ) : (
-                                "Scan Repository"
-                            )}
-                        </button>
+                        <div className="flex justify-stretch sm:justify-end">
+                            <button
+                                onClick={handleScan}
+                                disabled={
+                                    loading ||
+                                    (scanMode === "zip" && !file) ||
+                                    (scanMode === "github" && !repoUrl.trim())
+                                }
+                                className="inline-flex h-11 w-full items-center justify-center rounded-md bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 sm:w-auto sm:min-w-52"
+                            >
+                                {loading ? (
+                                    <>
+                                        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                        {loadingText}
+                                    </>
+                                ) : scanMode === "zip" ? (
+                                    "Scan ZIP File"
+                                ) : (
+                                    "Scan Repository"
+                                )}
+                            </button>
+                        </div>
                     </div>
 
                     {loading && (
