@@ -323,6 +323,63 @@ class TestConfigScanner:
             findings = config.scan(temp_name)
             assert any(".env" in f.title for f in findings)
             assert any(f.category == Category.EXPOSURE for f in findings)
+
+    def test_detect_env_local_file(self):
+        """Test detection of .env.local as a real environment file."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_name = os.path.join(temp_dir, ".env.local")
+            with open(temp_name, "w", encoding="utf-8") as f:
+                f.write("DATABASE_URL=postgres://user:pass@localhost/db\n")
+
+            findings = config.scan(temp_name)
+            assert any(f.rule_id == "CONFIG_ENV_FILE" for f in findings)
+
+    @pytest.mark.parametrize("filename", [".env.example", ".env.sample"])
+    def test_example_env_files_do_not_trigger_env_file_found(self, filename):
+        """Test that template env files are not treated as real .env files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_name = os.path.join(temp_dir, filename)
+            with open(temp_name, "w", encoding="utf-8") as f:
+                f.write("GEMINI_API_KEY=YOUR_KEY_HERE\n")
+
+            findings = config.scan(temp_name)
+            assert not any(f.rule_id == "CONFIG_ENV_FILE" for f in findings)
+
+    def test_example_env_placeholder_secret_is_ignored(self):
+        """Test clear placeholders in example env files are not treated as real secrets."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_name = os.path.join(temp_dir, ".env.example")
+            with open(temp_name, "w", encoding="utf-8") as f:
+                f.write("GEMINI_API_KEY=YOUR_KEY_HERE\n")
+
+            findings = config.scan(temp_name)
+            assert not findings
+
+    def test_example_env_next_public_placeholder_is_low_or_ignored(self):
+        """Test NEXT_PUBLIC placeholders in example env files are not critical."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_name = os.path.join(temp_dir, ".env.example")
+            with open(temp_name, "w", encoding="utf-8") as f:
+                f.write("NEXT_PUBLIC_GEMINI_API_KEY=YOUR_KEY_HERE\n")
+
+            findings = config.scan(temp_name)
+            assert not any(f.severity in {Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM} for f in findings)
+
+    def test_example_env_next_public_suspicious_value_is_medium(self):
+        """Test suspicious example NEXT_PUBLIC secret-like values are medium, not critical."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_name = os.path.join(temp_dir, ".env.example")
+            with open(temp_name, "w", encoding="utf-8") as f:
+                f.write("NEXT_PUBLIC_GEMINI_API_KEY=secret123\n")
+
+            findings = config.scan(temp_name)
+            next_public_findings = [
+                f for f in findings
+                if f.rule_id == "CONFIG_EXAMPLE_NEXT_PUBLIC_SECRET_LIKE"
+            ]
+            assert next_public_findings
+            assert all(f.severity == Severity.MEDIUM for f in next_public_findings)
+            assert not any(f.severity == Severity.CRITICAL for f in findings)
     
     def test_detect_cors_wildcard(self, sample_cors_wildcard_file):
         """Test detection of CORS allow_origins=["*"]."""
@@ -365,6 +422,33 @@ class TestScannerOrchestrator:
             assert any(finding.rule_id == "CONFIG_ENV_FILE" for finding in findings)
             assert any(finding.rule_id == "CONFIG_NEXT_PUBLIC_API_KEY" for finding in findings)
 
+    def test_scan_directory_example_env_placeholder_keeps_high_score(self):
+        """Test example env placeholder findings do not collapse the score."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_path = os.path.join(temp_dir, ".env.example")
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write("NEXT_PUBLIC_GEMINI_API_KEY=YOUR_KEY_HERE\n")
+
+            findings = scan_directory(temp_dir)
+            summary = generate_summary(findings)
+
+            assert not any(finding.rule_id == "CONFIG_ENV_FILE" for finding in findings)
+            assert summary.score >= 90
+
+    def test_scan_directory_example_env_suspicious_value_does_not_score_zero(self):
+        """Test suspicious example env values are reduced-impact findings."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_path = os.path.join(temp_dir, ".env.example")
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write("NEXT_PUBLIC_GEMINI_API_KEY=secret123\n")
+
+            findings = scan_directory(temp_dir)
+            summary = generate_summary(findings)
+
+            assert any(finding.severity == Severity.MEDIUM for finding in findings)
+            assert not any(finding.severity == Severity.CRITICAL for finding in findings)
+            assert summary.score >= 75
+
     def test_scan_directory_detects_sk_test_value(self):
         """Test that value-based scanning runs and downgrades sk_test_ values."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -385,12 +469,12 @@ class TestScannerOrchestrator:
 class TestScanSummary:
     """Tests for scan summary and risk scoring."""
 
-    def _finding(self, severity: Severity) -> Finding:
+    def _finding(self, severity: Severity, category: Category = Category.SECRETS) -> Finding:
         return Finding(
             rule_id=f"TEST_{severity.value.upper()}",
             title="Test finding",
             severity=severity,
-            category=Category.SECRETS,
+            category=category,
             file="test.py",
             line=1,
             evidence="test",
@@ -426,7 +510,7 @@ class TestScanSummary:
 
         summary = generate_summary(findings)
 
-        assert summary.score == 25
+        assert summary.score == 62
 
     def test_summary_no_findings_score_is_100(self):
         """Test empty scans keep a perfect score."""
@@ -445,10 +529,10 @@ class TestScanSummary:
         summary = generate_summary(findings)
 
         assert summary.low == 2
-        assert summary.score == 90
+        assert summary.score == 98
 
     def test_summary_many_critical_clamps_to_zero(self):
-        """Test score cannot go below zero."""
+        """Test repeated critical findings have diminishing impact."""
         findings = [
             self._finding(Severity.CRITICAL),
             self._finding(Severity.CRITICAL),
@@ -458,4 +542,50 @@ class TestScanSummary:
         summary = generate_summary(findings)
 
         assert summary.critical == 3
-        assert summary.score == 0
+        assert summary.score > 0
+
+    def test_summary_serious_mix_stays_critical_but_not_single_digit(self):
+        """Test several serious findings have gradation above catastrophic scores."""
+        findings = [
+            self._finding(Severity.CRITICAL, Category.DANGEROUS_CODE),
+            self._finding(Severity.CRITICAL, Category.SECRETS),
+            self._finding(Severity.HIGH, Category.EXPOSURE),
+            self._finding(Severity.HIGH, Category.DANGEROUS_CODE),
+            self._finding(Severity.HIGH, Category.SECRETS),
+            self._finding(Severity.MEDIUM, Category.CORS),
+            self._finding(Severity.LOW, Category.EXPOSURE),
+        ]
+
+        summary = generate_summary(findings)
+
+        assert summary.critical == 2
+        assert 25 <= summary.score <= 40
+
+    def test_summary_multiple_distinct_catastrophic_findings_can_score_single_digit(self):
+        """Test catastrophic confirmed findings can still produce a near-zero score."""
+        categories = [
+            Category.SECRETS,
+            Category.DANGEROUS_CODE,
+            Category.CONFIG,
+            Category.EXPOSURE,
+        ]
+        findings = []
+        for index, category in enumerate(categories):
+            finding = self._finding(Severity.CRITICAL, category)
+            finding.rule_id = f"TEST_PRIVATE_KEY_CRITICAL_{index}"
+            findings.append(finding)
+
+        summary = generate_summary(findings)
+
+        assert summary.critical == 4
+        assert summary.score <= 10
+
+    def test_summary_example_template_findings_have_reduced_impact(self):
+        """Test example/template env findings do not over-penalize the score."""
+        finding = self._finding(Severity.MEDIUM)
+        finding.rule_id = "CONFIG_EXAMPLE_NEXT_PUBLIC_SECRET_LIKE"
+        finding.file = ".env.example"
+
+        summary = generate_summary([finding])
+
+        assert summary.score >= 98

@@ -23,11 +23,45 @@ SCANNER_MAP = {
 }
 
 RISK_WEIGHTS = {
-    Severity.CRITICAL: 40,
-    Severity.HIGH: 20,
-    Severity.MEDIUM: 10,
-    Severity.LOW: 5,
+    Severity.CRITICAL: 24,
+    Severity.HIGH: 11,
+    Severity.MEDIUM: 6,
+    Severity.LOW: 1,
 }
+
+LOW_SEVERITY_PENALTY_CAP = 5
+SINGLE_DIGIT_SCORE_FLOOR = 10
+
+EXAMPLE_FINDING_RULE_PREFIXES = (
+    "CONFIG_EXAMPLE_",
+)
+
+EXAMPLE_ENV_FILENAMES = {
+    ".env.example",
+    ".env.sample",
+    ".env.template",
+    ".env.example.local",
+    "example.env",
+    "sample.env",
+    "template.env",
+}
+
+CATASTROPHIC_RULE_KEYWORDS = (
+    "PRIVATE_KEY",
+    "AUTH_BYPASS",
+    "ADMIN_CREDENTIAL",
+    "SQL_INJECTION",
+    "COMMAND_INJECTION",
+    "DESTRUCTIVE",
+    "MALWARE",
+)
+
+CODE_EXECUTION_RULE_KEYWORDS = (
+    "SUBPROCESS_SHELL",
+    "CHILD_PROCESS_EXEC",
+    "EXEC",
+    "RCE",
+)
 
 
 def _scanner_key(filename: str) -> str:
@@ -51,8 +85,48 @@ def generate_summary(findings: List[Finding]) -> ScanSummary:
         severity = Severity(finding.severity)
         counts[severity] += 1
 
-    deduction = sum(counts[severity] * weight for severity, weight in RISK_WEIGHTS.items())
-    score = max(0, min(100, 100 - deduction))
+    rule_counts = {}
+    severity_counts = {}
+    category_counts = {}
+    deduction = 0.0
+    low_deduction = 0.0
+    real_critical_findings = []
+
+    for finding in findings:
+        severity = Severity(finding.severity)
+        rule_id = finding.rule_id
+        rule_seen_count = rule_counts.get(rule_id, 0)
+        rule_counts[rule_id] = rule_seen_count + 1
+        severity_seen_count = severity_counts.get(severity, 0)
+        severity_counts[severity] = severity_seen_count + 1
+        category_seen_count = category_counts.get(finding.category, 0)
+        category_counts[finding.category] = category_seen_count + 1
+
+        duplicate_multiplier = _duplicate_multiplier(rule_seen_count)
+        severity_multiplier = _repeat_multiplier(severity_seen_count)
+        category_multiplier = _category_multiplier(category_seen_count)
+        example_multiplier = 0.25 if _is_example_or_template_finding(finding) else 1.0
+        penalty = (
+            RISK_WEIGHTS[severity]
+            * min(duplicate_multiplier, severity_multiplier, category_multiplier)
+            * example_multiplier
+        )
+
+        if severity == Severity.LOW:
+            low_deduction += penalty
+        else:
+            deduction += penalty
+
+        if severity == Severity.CRITICAL and not _is_example_or_template_finding(finding):
+            real_critical_findings.append(finding)
+
+    deduction += min(low_deduction, LOW_SEVERITY_PENALTY_CAP)
+    catastrophic_risk = _has_catastrophic_risk(real_critical_findings)
+    if catastrophic_risk and deduction >= 60:
+        deduction += 30
+    score = max(0, min(100, round(100 - deduction)))
+    if score < SINGLE_DIGIT_SCORE_FLOOR and not catastrophic_risk:
+        score = SINGLE_DIGIT_SCORE_FLOOR
 
     return ScanSummary(
         total=len(findings),
@@ -61,6 +135,64 @@ def generate_summary(findings: List[Finding]) -> ScanSummary:
         medium=counts[Severity.MEDIUM],
         low=counts[Severity.LOW],
         score=score,
+    )
+
+
+def _repeat_multiplier(previous_count: int) -> float:
+    """Diminish repeated findings with the same broad risk dimension."""
+    if previous_count == 0:
+        return 1.0
+    if previous_count == 1:
+        return 0.75
+    if previous_count == 2:
+        return 0.55
+    return 0.35
+
+
+def _duplicate_multiplier(previous_count: int) -> float:
+    """Diminish duplicate/same-rule findings more aggressively."""
+    if previous_count == 0:
+        return 1.0
+    if previous_count == 1:
+        return 0.5
+    return 0.25
+
+
+def _category_multiplier(previous_count: int) -> float:
+    """Keep repeated findings in one category from overwhelming the score."""
+    if previous_count == 0:
+        return 1.0
+    if previous_count == 1:
+        return 0.85
+    if previous_count == 2:
+        return 0.65
+    return 0.45
+
+
+def _has_catastrophic_risk(real_critical_findings: List[Finding]) -> bool:
+    """Return true when single-digit scores are justified by confirmed severe patterns."""
+    if len(real_critical_findings) >= 4:
+        categories = {finding.category for finding in real_critical_findings}
+        if len(categories) >= 2:
+            return True
+
+    rule_ids = [finding.rule_id.upper() for finding in real_critical_findings]
+    if any(any(keyword in rule_id for keyword in CATASTROPHIC_RULE_KEYWORDS) for rule_id in rule_ids):
+        return True
+
+    code_execution_count = sum(
+        any(keyword in rule_id for keyword in CODE_EXECUTION_RULE_KEYWORDS)
+        for rule_id in rule_ids
+    )
+    return code_execution_count >= 2
+
+
+def _is_example_or_template_finding(finding: Finding) -> bool:
+    """Identify findings from example/template config files for reduced scoring impact."""
+    filename = Path(finding.file).name.lower()
+    return (
+        filename in EXAMPLE_ENV_FILENAMES
+        or any(finding.rule_id.startswith(prefix) for prefix in EXAMPLE_FINDING_RULE_PREFIXES)
     )
 
 
