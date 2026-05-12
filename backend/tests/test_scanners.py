@@ -387,13 +387,19 @@ class TestConfigScanner:
             assert not any(f.severity in {Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM} for f in findings)
 
     def test_example_env_next_public_suspicious_value_is_medium(self):
-        """Test dummy example NEXT_PUBLIC values are not critical."""
+        """Test suspicious example NEXT_PUBLIC secret-like values are medium, not critical."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_name = os.path.join(temp_dir, ".env.example")
             with open(temp_name, "w", encoding="utf-8") as f:
                 f.write("NEXT_PUBLIC_GEMINI_API_KEY=secret123\n")
 
             findings = config.scan(temp_name)
+            next_public_findings = [
+                finding for finding in findings
+                if finding.rule_id == "CONFIG_EXAMPLE_NEXT_PUBLIC_SECRET_LIKE"
+            ]
+            assert next_public_findings
+            assert all(finding.severity == Severity.MEDIUM for finding in next_public_findings)
             assert not any(f.severity == Severity.CRITICAL for f in findings)
     
     def test_detect_cors_wildcard(self, sample_cors_wildcard_file):
@@ -490,6 +496,20 @@ class TestScannerOrchestrator:
             assert not any(finding.rule_id == "CONFIG_ENV_FILE" for finding in findings)
             assert all(finding.file_context == FileContext.EXAMPLE_TEMPLATE for finding in findings)
             assert summary.score >= 90
+
+    def test_scan_directory_example_env_suspicious_value_does_not_score_zero(self):
+        """Test suspicious example env values are reduced-impact findings."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_path = os.path.join(temp_dir, ".env.example")
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write("NEXT_PUBLIC_GEMINI_API_KEY=secret123\n")
+
+            findings = scan_directory(temp_dir)
+            summary = generate_summary(findings)
+
+            assert any(finding.severity == Severity.LOW for finding in findings)
+            assert not any(finding.severity == Severity.CRITICAL for finding in findings)
+            assert summary.score >= 98
 
     def test_fixture_demo_docs_only_repo_does_not_become_critical_risk(self):
         """Test intentionally bad fixtures/docs do not dominate repo risk."""
@@ -768,6 +788,17 @@ class TestScanSummary:
         ]).score
 
         assert production < demo < example
+
+    def test_summary_example_template_findings_have_reduced_impact(self):
+        """Test example/template env findings do not over-penalize the score."""
+        finding = self._finding(Severity.MEDIUM)
+        finding.rule_id = "CONFIG_EXAMPLE_NEXT_PUBLIC_SECRET_LIKE"
+        finding.file = ".env.example"
+        finding.file_context = FileContext.EXAMPLE_TEMPLATE
+
+        summary = generate_summary([finding])
+
+        assert summary.score >= 98
 
     def test_summary_multiple_distinct_catastrophic_findings_can_score_single_digit(self):
         """Test catastrophic confirmed findings can still produce a near-zero score."""

@@ -28,7 +28,6 @@ PLACEHOLDER_VALUES = {
     "dummy",
     "xxx",
     "replace_me",
-    "secret123",
 }
 
 SECRET_NAME_PATTERN = re.compile(
@@ -80,6 +79,8 @@ def is_placeholder_value(value: str) -> bool:
     if lowered in PLACEHOLDER_VALUES:
         return True
     if lowered.startswith("<") and lowered.endswith(">"):
+        return True
+    if lowered in {"<your-key-here>", "<your_api_key>", "<replace_me>"}:
         return True
     if re.fullmatch(r"x+", lowered):
         return True
