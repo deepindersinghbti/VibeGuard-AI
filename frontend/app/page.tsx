@@ -14,25 +14,108 @@ export default function Home() {
     const [loading, setLoading] = useState(false);
     const [showColdStartHint, setShowColdStartHint] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [fileError, setFileError] = useState<string | null>(null);
+    const [dragActive, setDragActive] = useState(false);
     const [findings, setFindings] = useState<Finding[]>([]);
     const [summary, setSummary] = useState<ScanSummary | null>(null);
     const [scanned, setScanned] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const dragDepthRef = useRef(0);
+
+    const isZipFile = (selectedFile: File) => {
+        const hasZipExtension = selectedFile.name.toLowerCase().endsWith(".zip");
+        const hasZipMimeType = [
+            "application/zip",
+            "application/x-zip-compressed",
+            "application/octet-stream",
+            "",
+        ].includes(selectedFile.type);
+
+        return hasZipExtension && hasZipMimeType;
+    };
+
+    const selectZipFile = (selectedFile?: File) => {
+        if (!selectedFile) {
+            return;
+        }
+
+        if (!isZipFile(selectedFile)) {
+            setFile(null);
+            setFileError("Please upload a .zip file.");
+            setError(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+            return;
+        }
+
+        setFile(selectedFile);
+        setFileError(null);
+        setError(null);
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFile = e.target.files?.[0];
-        if (selectedFile) {
-            if (selectedFile.name.toLowerCase().endsWith(".zip")) {
-                setFile(selectedFile);
-                setError(null);
-            } else {
-                setError("Please select a .zip file");
-                setFile(null);
-            }
+        selectZipFile(e.target.files?.[0]);
+    };
+
+    const openFilePicker = () => {
+        if (!loading) {
+            fileInputRef.current?.click();
         }
+    };
+
+    const handleDropzoneKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openFilePicker();
+        }
+    };
+
+    const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (loading) return;
+
+        dragDepthRef.current += 1;
+        setDragActive(true);
+    };
+
+    const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!loading) {
+            event.dataTransfer.dropEffect = "copy";
+            setDragActive(true);
+        }
+    };
+
+    const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (loading) return;
+
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+        if (dragDepthRef.current === 0) {
+            setDragActive(false);
+        }
+    };
+
+    const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragDepthRef.current = 0;
+        setDragActive(false);
+
+        if (loading) {
+            return;
+        }
+
+        selectZipFile(event.dataTransfer.files?.[0]);
     };
 
     const resetResults = () => {
         setError(null);
+        setFileError(null);
         setSummary(null);
         setFindings([]);
         setScanned(false);
@@ -125,6 +208,12 @@ export default function Home() {
     const loadingText =
         scanMode === "github" ? "Scanning repository..." : "Analyzing files...";
 
+    const zipDropzoneState = loading
+        ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-75"
+        : dragActive
+            ? "cursor-pointer border-blue-500 bg-blue-50 ring-2 ring-blue-100"
+            : "cursor-pointer border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/60";
+
     return (
         <main className="min-h-screen bg-slate-50 text-slate-950">
             <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -184,17 +273,49 @@ export default function Home() {
                                 <label className="mb-2 block text-sm font-medium text-slate-700">
                                     ZIP file
                                 </label>
-                                <input
-                                    type="file"
-                                    accept=".zip"
-                                    onChange={handleFileChange}
-                                    disabled={loading}
-                                    className="block w-full text-sm text-slate-600 file:mr-4 file:rounded file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
-                                />
+                                <div
+                                    role="button"
+                                    tabIndex={loading ? -1 : 0}
+                                    aria-label="Upload ZIP file"
+                                    aria-disabled={loading}
+                                    onClick={openFilePicker}
+                                    onKeyDown={handleDropzoneKeyDown}
+                                    onDragEnter={handleDragEnter}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
+                                    className={`rounded-lg border-2 border-dashed px-5 py-7 text-center outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 ${zipDropzoneState}`}
+                                >
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".zip,application/zip,application/x-zip-compressed"
+                                        onChange={handleFileChange}
+                                        disabled={loading}
+                                        className="sr-only"
+                                    />
+                                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-2xl shadow-sm ring-1 ring-slate-200">
+                                        {loading ? "..." : "ZIP"}
+                                    </div>
+                                    <p className="mt-4 text-sm font-semibold text-slate-950">
+                                        {dragActive ? "Drop your ZIP file to upload" : "Drag & drop your ZIP file here"}
+                                    </p>
+                                    <p className="mt-1 text-sm text-slate-600">
+                                        or click to browse
+                                    </p>
+                                    <p className="mt-3 text-xs font-medium text-slate-500">
+                                        ZIP archives only
+                                    </p>
+                                </div>
                                 {file && (
-                                    <p className="mt-2 text-sm text-slate-600">
-                                        Selected: <span className="font-medium text-slate-900">{file.name}</span>{" "}
-                                        ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                                    <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">
+                                        <span className="font-medium text-slate-950">{file.name}</span>{" "}
+                                        <span className="text-slate-500">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                                    </div>
+                                )}
+                                {fileError && (
+                                    <p className="mt-2 text-sm font-medium text-red-700">
+                                        {fileError}
                                     </p>
                                 )}
                             </div>
