@@ -31,9 +31,28 @@ VALUE_PATTERNS: Tuple[Tuple[str, str, str], ...] = (
 )
 
 # False positive avoidance: common placeholder values
+PLACEHOLDER_VALUES = {
+    "secret123",
+    "your_key_here",
+    "your_api_key",
+    "test",
+    "dummy",
+    "example",
+    "fake",
+    "abc",
+    "xyz",
+    "token",
+    "jwt_secret",
+    "changeme",
+    "change_me",
+    "placeholder",
+    "replace_me",
+}
+
 FALSE_POSITIVE_MARKERS = {
     "your_", "example", "dummy", "test", "placeholder", "changeme",
-    "xxxx", "your_key", "your_token", "your_api", "your_secret",
+    "change_me", "replace_me", "xxxx", "your_key", "your_token",
+    "your_api", "your_secret", "fake", "sample", "demo",
 }
 
 
@@ -54,7 +73,10 @@ SPECIFIC_NAME_MARKERS = (
 
 def _is_false_positive(value: str) -> bool:
     """Check if a value looks like a placeholder/example."""
-    value_lower = value.lower()
+    value_lower = value.strip().strip("'\"").lower()
+
+    if value_lower in PLACEHOLDER_VALUES:
+        return True
     
     # Check for common false positive markers
     for marker in FALSE_POSITIVE_MARKERS:
@@ -66,10 +88,32 @@ def _is_false_positive(value: str) -> bool:
         return True
     
     # Check for extremely short values (likely placeholder)
-    if len(value) < 5:
+    if len(value_lower) < 5:
         return True
     
     return False
+
+
+def _looks_like_real_secret(value: str) -> bool:
+    """Check whether a value has a provider format or enough entropy to be high confidence."""
+    normalized = value.strip().strip("'\"")
+    if _is_false_positive(normalized) and not normalized.lower().startswith(("sk-proj-", "ghp_", "github_pat_", "aiza", "akia", "asia")):
+        return False
+
+    if _find_value_match(normalized):
+        return True
+
+    if len(normalized) < 20:
+        return False
+
+    char_classes = sum([
+        bool(re.search(r"[a-z]", normalized)),
+        bool(re.search(r"[A-Z]", normalized)),
+        bool(re.search(r"\d", normalized)),
+        bool(re.search(r"[^A-Za-z0-9]", normalized)),
+    ])
+    unique_ratio = len(set(normalized)) / max(len(normalized), 1)
+    return char_classes >= 3 and unique_ratio >= 0.45
 
 
 def _mask_secret(value: str, show_chars: int = 3) -> str:
@@ -90,8 +134,17 @@ def _is_demo_or_test_value(value: str) -> bool:
 def _severity_for_value(value: str) -> Severity:
     """Assign a severity for value-based detections."""
     if _is_demo_or_test_value(value):
-        return Severity.MEDIUM
+        return Severity.LOW
     return Severity.CRITICAL
+
+
+def _severity_for_named_secret(value: str) -> Severity:
+    """Assign severity for name-based secret detections."""
+    if _is_false_positive(value):
+        return Severity.LOW
+    if _looks_like_real_secret(value):
+        return Severity.CRITICAL
+    return Severity.MEDIUM
 
 
 def _find_value_match(line: str) -> Optional[Tuple[str, str, str]]:
@@ -99,6 +152,8 @@ def _find_value_match(line: str) -> Optional[Tuple[str, str, str]]:
     for pattern, rule_id_suffix, title in VALUE_PATTERNS:
         match = re.search(pattern, line)
         if match:
+            if rule_id_suffix == "private_key_block" and re.search(r"\br['\"]", line):
+                continue
             return rule_id_suffix, title, match.group(1) if match.groups() else match.group(0)
     return None
 
@@ -136,15 +191,13 @@ def scan(file_path: str) -> List[Finding]:
                 if match:
                     value = match.group(1) if match.groups() else match.group(0)
                     
-                    # Skip false positives
-                    if _is_false_positive(value):
-                        continue
+                    severity = _severity_for_named_secret(value)
                     
                     # Create finding
                     findings.append(Finding(
                         rule_id=f"SECRETS_{pattern_key.upper()}",
                         title=f"Hardcoded {secret_name} ({pattern_key.upper()})",
-                        severity=Severity.CRITICAL,
+                        severity=severity,
                         category=Category.SECRETS,
                         file=file_path,
                         line=line_num,

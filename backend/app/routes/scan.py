@@ -2,7 +2,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, status
 from app.services.github_scanner import GitHubScanError, clone_github_repo_temp
 from app.services.zip_handler import extract_zip_temp, ZipExtractionError
-from app.services.scanner import generate_summary, scan_directory
+from app.services.scanner import ScanStats, generate_summary, scan_directory
 from app.models import GitHubScanRequest, ScanResponse
 
 router = APIRouter(prefix="/api/v1", tags=["scan"])
@@ -37,8 +37,9 @@ async def upload_and_scan_zip(file: UploadFile = File(...)):
         # Extract ZIP safely and automatically clean up with context manager
         with extract_zip_temp(content) as extract_dir:
             # Scan the extracted directory
-            findings = scan_directory(extract_dir)
-            return ScanResponse(summary=generate_summary(findings), findings=findings)
+            stats = ScanStats()
+            findings = scan_directory(extract_dir, stats)
+            return ScanResponse(summary=generate_summary(findings, stats), findings=findings)
         
     except ZipExtractionError as e:
         raise HTTPException(
@@ -61,8 +62,9 @@ async def scan_github_repository(request: GitHubScanRequest):
     """
     try:
         with clone_github_repo_temp(request.repo_url) as repo_dir:
-            findings = scan_directory(repo_dir)
-            return ScanResponse(summary=generate_summary(findings), findings=findings)
+            stats = ScanStats()
+            findings = scan_directory(repo_dir, stats)
+            return ScanResponse(summary=generate_summary(findings, stats), findings=findings)
 
     except GitHubScanError as e:
         raise HTTPException(

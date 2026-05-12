@@ -43,10 +43,11 @@ class DangerousCallVisitor(ast.NodeVisitor):
         
         # Check for subprocess with shell=True
         if self._is_subprocess_shell_true(node):
+            static_command = self._has_static_command(node)
             self.findings.append(Finding(
                 rule_id="PY_SUBPROCESS_SHELL",
                 title="subprocess call with shell=True",
-                severity=Severity.CRITICAL,
+                severity=Severity.HIGH if static_command else Severity.CRITICAL,
                 category=Category.DANGEROUS_CODE,
                 file=self.file_path,
                 line=node.lineno,
@@ -71,6 +72,20 @@ class DangerousCallVisitor(ast.NodeVisitor):
                                     return True
                                 if isinstance(keyword.value, ast.NameConstant) and keyword.value.value is True:
                                     return True
+        return False
+
+    def _has_static_command(self, node):
+        """Return true when subprocess command is a literal string/list."""
+        if not node.args:
+            return False
+        command = node.args[0]
+        if isinstance(command, ast.Constant) and isinstance(command.value, str):
+            return True
+        if isinstance(command, (ast.List, ast.Tuple)):
+            return all(
+                isinstance(item, ast.Constant) and isinstance(item.value, str)
+                for item in command.elts
+            )
         return False
     
     def _get_line_text(self, line_num):

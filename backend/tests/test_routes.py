@@ -37,6 +37,11 @@ class TestScanEndpoint:
         assert len(findings) == 0
         assert summary["total"] == 0
         assert summary["score"] == 100
+        assert summary["scanned_files"] == 2
+        assert summary["ignored_files"] == 0
+        assert summary["skipped_generated_dependency_files"] == 0
+        assert summary["production_penalty"] == 0
+        assert summary["duplicate_caps_applied"] is False
     
     def test_upload_zip_with_issues(self, client, api_key_zip):
         """Test uploading a ZIP with security issues."""
@@ -53,6 +58,7 @@ class TestScanEndpoint:
         # Should have API key findings
         assert len(findings) > 0
         assert any("API" in f["title"] for f in findings)
+        assert all("file_context" in f for f in findings)
         assert summary["total"] == len(findings)
         assert summary["critical"] > 0
     
