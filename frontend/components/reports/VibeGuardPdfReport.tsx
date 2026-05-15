@@ -39,44 +39,45 @@ const SEVERITY_STYLES: Record<Severity, { badge: Style; accent: Style }> = {
 
 const styles = StyleSheet.create({
     page: {
-        paddingTop: 42,
-        paddingRight: 42,
-        paddingBottom: 58,
-        paddingLeft: 42,
+        paddingTop: 46,
+        paddingRight: 46,
+        paddingBottom: 64,
+        paddingLeft: 46,
         backgroundColor: "#f8fafc",
         color: "#0f172a",
         fontFamily: "Helvetica",
         fontSize: 10,
-        lineHeight: 1.45,
+        lineHeight: 1.5,
     },
     header: {
-        marginBottom: 22,
-        paddingBottom: 14,
+        marginBottom: 26,
+        paddingBottom: 16,
         borderBottomWidth: 1,
-        borderBottomColor: "#dbe3ef",
+        borderBottomColor: "#cbd5e1",
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "flex-start",
     },
     brandMark: {
-        width: 26,
-        height: 26,
+        width: 28,
+        height: 28,
         borderRadius: 6,
         backgroundColor: "#2563eb",
-        marginRight: 9,
+        marginRight: 10,
     },
     brandRow: {
         flexDirection: "row",
         alignItems: "center",
     },
     brand: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: 700,
         color: "#0f172a",
+        letterSpacing: -0.3,
     },
     brandSubline: {
         marginTop: 2,
-        fontSize: 8,
+        fontSize: 9,
         color: "#64748b",
     },
     generated: {
@@ -85,146 +86,158 @@ const styles = StyleSheet.create({
         textAlign: "right",
     },
     hero: {
-        marginBottom: 18,
-        padding: 18,
-        borderRadius: 10,
+        marginBottom: 24,
+        padding: 22,
+        borderRadius: 12,
         backgroundColor: "#ffffff",
         borderWidth: 1,
-        borderColor: "#dbe3ef",
+        borderColor: "#e2e8f0",
     },
     title: {
-        fontSize: 24,
+        fontSize: 26,
         fontWeight: 700,
         color: "#0f172a",
+        letterSpacing: -0.5,
     },
     subtitle: {
-        marginTop: 6,
-        maxWidth: 420,
-        fontSize: 10,
+        marginTop: 8,
+        maxWidth: 440,
+        fontSize: 11,
         color: "#475569",
+        lineHeight: 1.5,
     },
     metaGrid: {
-        marginTop: 16,
+        marginTop: 20,
         flexDirection: "row",
-        gap: 8,
+        gap: 12,
     },
     metaItem: {
         flexGrow: 1,
         flexBasis: 0,
-        padding: 10,
-        borderRadius: 8,
+        padding: 12,
+        borderRadius: 10,
         backgroundColor: "#f8fafc",
         borderWidth: 1,
         borderColor: "#e2e8f0",
     },
     metaLabel: {
-        fontSize: 7,
+        fontSize: 8,
         textTransform: "uppercase",
-        letterSpacing: 0.7,
+        letterSpacing: 0.8,
         color: "#64748b",
     },
     metaValue: {
-        marginTop: 4,
-        fontSize: 13,
+        marginTop: 6,
+        fontSize: 15,
         fontWeight: 700,
         color: "#0f172a",
     },
     section: {
-        marginBottom: 18,
+        marginBottom: 24,
     },
     sectionTitle: {
-        marginBottom: 8,
-        fontSize: 14,
+        marginBottom: 12,
+        paddingBottom: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: "#e2e8f0",
+        fontSize: 16,
         fontWeight: 700,
         color: "#0f172a",
+        letterSpacing: -0.3,
     },
     bodyCard: {
-        padding: 14,
-        borderRadius: 9,
+        padding: 16,
+        borderRadius: 10,
         backgroundColor: "#ffffff",
         borderWidth: 1,
-        borderColor: "#dbe3ef",
+        borderColor: "#e2e8f0",
     },
     paragraph: {
-        marginBottom: 5,
+        marginBottom: 6,
         color: "#334155",
+        fontSize: 11,
     },
     warningCard: {
-        marginBottom: 12,
-        padding: 14,
-        borderRadius: 9,
+        marginBottom: 16,
+        padding: 16,
+        borderRadius: 10,
         backgroundColor: "#ffffff",
         borderWidth: 1,
-        borderColor: "#dbe3ef",
+        borderColor: "#cbd5e1",
         borderLeftWidth: 4,
     },
     warningHeader: {
-        marginBottom: 8,
+        marginBottom: 10,
         flexDirection: "row",
         justifyContent: "space-between",
+        alignItems: "center",
         gap: 12,
     },
     warningTitle: {
-        width: "72%",
-        fontSize: 12,
+        width: "75%",
+        fontSize: 13,
         fontWeight: 700,
         color: "#0f172a",
+        letterSpacing: -0.2,
     },
     badge: {
-        paddingTop: 3,
-        paddingRight: 7,
-        paddingBottom: 3,
-        paddingLeft: 7,
+        paddingTop: 4,
+        paddingRight: 8,
+        paddingBottom: 4,
+        paddingLeft: 8,
         borderRadius: 999,
         borderWidth: 1,
-        fontSize: 7,
+        fontSize: 8,
         fontWeight: 700,
         textTransform: "uppercase",
         textAlign: "center",
     },
     detailRow: {
-        marginTop: 3,
+        marginTop: 4,
         color: "#475569",
+        fontSize: 10,
     },
     detailLabel: {
         fontWeight: 700,
         color: "#1e293b",
     },
     codeBlock: {
-        marginTop: 9,
-        padding: 9,
-        borderRadius: 7,
+        marginTop: 12,
+        padding: 10,
+        borderRadius: 8,
         backgroundColor: "#0f172a",
-        color: "#e2e8f0",
+        color: "#f8fafc",
         fontFamily: "Courier",
-        fontSize: 8,
-        lineHeight: 1.35,
+        fontSize: 9,
+        lineHeight: 1.4,
     },
     recommendation: {
-        marginTop: 9,
-        padding: 10,
-        borderRadius: 7,
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 8,
         backgroundColor: "#f8fafc",
         borderWidth: 1,
         borderColor: "#e2e8f0",
     },
     explanation: {
-        marginTop: 9,
-        padding: 10,
-        borderRadius: 7,
+        marginTop: 12,
+        padding: 12,
+        borderRadius: 8,
         backgroundColor: "#eff6ff",
         borderWidth: 1,
         borderColor: "#bfdbfe",
     },
     miniHeading: {
-        marginBottom: 4,
-        fontSize: 9,
+        marginBottom: 6,
+        fontSize: 10,
         fontWeight: 700,
         color: "#0f172a",
+        letterSpacing: -0.1,
     },
     markdownLine: {
-        marginBottom: 3,
+        marginBottom: 4,
         color: "#334155",
+        fontSize: 10,
     },
     markdownStrong: {
         fontWeight: 700,
@@ -232,26 +245,30 @@ const styles = StyleSheet.create({
     },
     footer: {
         position: "absolute",
-        left: 42,
-        right: 42,
-        bottom: 28,
-        paddingTop: 9,
+        left: 46,
+        right: 46,
+        bottom: 30,
+        paddingTop: 12,
         borderTopWidth: 1,
-        borderTopColor: "#dbe3ef",
+        borderTopColor: "#cbd5e1",
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
         color: "#64748b",
-        fontSize: 8,
+        fontSize: 9,
     },
     emptyState: {
-        padding: 18,
-        borderRadius: 9,
+        padding: 20,
+        borderRadius: 10,
         backgroundColor: "#f0fdf4",
         borderWidth: 1,
         borderColor: "#bbf7d0",
         color: "#166534",
     },
+    warningDetailsSection: {
+        marginTop: 20,
+        marginBottom: 24,
+    }
 });
 
 export function VibeGuardPdfReport({
@@ -328,7 +345,14 @@ export function VibeGuardPdfReport({
                     </View>
                 </View>
 
-                <View style={styles.section} break>
+                <ReportFooter />
+            </Page>
+
+            {/* Page 2+: Warning Details */}
+            <Page size="A4" style={styles.page} wrap>
+                <ReportHeader generatedAt={generatedAt} />
+
+                <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Warning Details</Text>
                     {findings.length === 0 ? (
                         <View style={styles.emptyState}>
@@ -461,24 +485,28 @@ function ExistingExplanation({ explanation }: { explanation?: ExplainResponse })
         return null;
     }
 
+    const expText = explanation.explanation?.trim();
+    const attackText = explanation.attack_scenario?.trim();
+    const fixText = explanation.fix_details?.trim();
+
     return (
         <View style={styles.explanation}>
-            {explanation.explanation?.trim() ? (
+            {expText && !isFallbackText(expText) ? (
                 <View>
                     <Text style={styles.miniHeading}>Why this is dangerous</Text>
-                    <MarkdownLikeText content={normalizeExplanation(explanation.explanation)} />
+                    <MarkdownLikeText content={normalizeExplanation(expText)} />
                 </View>
             ) : null}
-            {explanation.attack_scenario?.trim() ? (
+            {attackText && !isFallbackText(attackText) ? (
                 <View>
                     <Text style={styles.miniHeading}>Attack scenario</Text>
-                    <MarkdownLikeText content={normalizeExplanation(explanation.attack_scenario)} />
+                    <MarkdownLikeText content={normalizeExplanation(attackText)} />
                 </View>
             ) : null}
-            {explanation.fix_details?.trim() ? (
+            {fixText && !isFallbackText(fixText) ? (
                 <View>
                     <Text style={styles.miniHeading}>How to fix it</Text>
-                    <MarkdownLikeText content={normalizeExplanation(explanation.fix_details)} />
+                    <MarkdownLikeText content={normalizeExplanation(fixText)} />
                 </View>
             ) : null}
         </View>
@@ -528,12 +556,21 @@ function InlineMarkdownText({ text }: { text: string }) {
     );
 }
 
+function isFallbackText(text: string): boolean {
+    const lower = text.toLowerCase();
+    return lower.includes("unavailable") || lower.includes("not available") || lower.includes("use the recommendation shown");
+}
+
 function hasAnyExplanationContent(explanation: ExplainResponse): boolean {
-    return Boolean(
-        explanation.explanation?.trim() ||
-        explanation.attack_scenario?.trim() ||
-        explanation.fix_details?.trim()
-    );
+    const expText = explanation.explanation?.trim() || "";
+    const attackText = explanation.attack_scenario?.trim() || "";
+    const fixText = explanation.fix_details?.trim() || "";
+
+    const hasRealExp = expText && !isFallbackText(expText);
+    const hasRealAttack = attackText && !isFallbackText(attackText);
+    const hasRealFix = fixText && !isFallbackText(fixText);
+
+    return Boolean(hasRealExp || hasRealAttack || hasRealFix);
 }
 
 function groupFindingsByFile(findings: Finding[]): Record<string, Finding[]> {
