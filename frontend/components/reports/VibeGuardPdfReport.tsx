@@ -328,7 +328,7 @@ export function VibeGuardPdfReport({
                     </View>
                 </View>
 
-                <View style={styles.section}>
+                <View style={styles.section} break>
                     <Text style={styles.sectionTitle}>Warning Details</Text>
                     {findings.length === 0 ? (
                         <View style={styles.emptyState}>
@@ -398,55 +398,57 @@ function WarningCard({ finding, explanation }: { finding: Finding; explanation?:
 
     return (
         <View style={[styles.warningCard, severityStyle.accent]}>
-            <View style={styles.warningHeader}>
-                <Text style={styles.warningTitle}>{finding.title}</Text>
-                <Text style={[styles.badge, severityStyle.badge]}>{finding.severity}</Text>
-            </View>
+            <View wrap={false}>
+                <View style={styles.warningHeader}>
+                    <Text style={styles.warningTitle}>{finding.title}</Text>
+                    <Text style={[styles.badge, severityStyle.badge]}>{finding.severity}</Text>
+                </View>
 
-            <Text style={styles.detailRow}>
-                <Text style={styles.detailLabel}>File path: </Text>
-                {finding.file}
-            </Text>
-            <Text style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Line: </Text>
-                {finding.line}
-            </Text>
-            <Text style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Category: </Text>
-                {finding.category}
-            </Text>
-            <Text style={styles.detailRow}>
-                <Text style={styles.detailLabel}>File context: </Text>
-                {finding.file_context}
-            </Text>
-            <Text style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Rule: </Text>
-                {finding.rule_id}
-            </Text>
-            {finding.original_severity ? (
                 <Text style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Original severity: </Text>
-                    {finding.original_severity}
+                    <Text style={styles.detailLabel}>File path: </Text>
+                    {finding.file}
                 </Text>
-            ) : null}
-            {finding.adjusted_severity_reason ? (
                 <Text style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Severity adjustment: </Text>
-                    {finding.adjusted_severity_reason}
+                    <Text style={styles.detailLabel}>Line: </Text>
+                    {finding.line}
                 </Text>
-            ) : null}
-            {typeof finding.score_penalty === "number" ? (
                 <Text style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Score penalty: </Text>
-                    {Math.round(finding.score_penalty)}
+                    <Text style={styles.detailLabel}>Category: </Text>
+                    {finding.category}
                 </Text>
-            ) : null}
+                <Text style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>File context: </Text>
+                    {finding.file_context}
+                </Text>
+                <Text style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Rule: </Text>
+                    {finding.rule_id}
+                </Text>
+                {finding.original_severity ? (
+                    <Text style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Original severity: </Text>
+                        {finding.original_severity}
+                    </Text>
+                ) : null}
+                {finding.adjusted_severity_reason ? (
+                    <Text style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Severity adjustment: </Text>
+                        {finding.adjusted_severity_reason}
+                    </Text>
+                ) : null}
+                {typeof finding.score_penalty === "number" ? (
+                    <Text style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Score penalty: </Text>
+                        {Math.round(finding.score_penalty)}
+                    </Text>
+                ) : null}
 
-            <Text style={styles.codeBlock}>{finding.evidence}</Text>
+                <Text style={styles.codeBlock}>{finding.evidence}</Text>
 
-            <View style={styles.recommendation}>
-                <Text style={styles.miniHeading}>Fix recommendation</Text>
-                <MarkdownLikeText content={normalizeExplanation(finding.recommendation)} />
+                <View style={styles.recommendation}>
+                    <Text style={styles.miniHeading}>Fix recommendation</Text>
+                    <MarkdownLikeText content={normalizeExplanation(finding.recommendation)} />
+                </View>
             </View>
 
             <ExistingExplanation explanation={explanation} />
