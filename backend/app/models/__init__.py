@@ -9,6 +9,7 @@ from .finding import (
     ScanSummary,
     Severity,
     Category,
+    FileContext,
 )
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "ScanSummary",
     "Severity",
     "Category",
+    "FileContext",
 ]

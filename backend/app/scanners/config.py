@@ -99,6 +99,22 @@ def _masked_env_value(value: str) -> str:
     return f"{normalized[:3]}...{normalized[-3:]}"
 
 
+def _looks_like_real_secret(value: str) -> bool:
+    """Return true for provider-shaped or long random-looking values."""
+    normalized = _strip_env_value(value)
+    if len(normalized) < 20:
+        return False
+    if re.search(r"^(sk-(?:proj-)?|ghp_|github_pat_|AIza|AKIA|ASIA)", normalized):
+        return True
+    char_classes = sum([
+        bool(re.search(r"[a-z]", normalized)),
+        bool(re.search(r"[A-Z]", normalized)),
+        bool(re.search(r"\d", normalized)),
+        bool(re.search(r"[^A-Za-z0-9]", normalized)),
+    ])
+    return char_classes >= 3 and len(set(normalized)) / max(len(normalized), 1) >= 0.45
+
+
 def scan(file_path: str) -> List[Finding]:
     """
     Scan a file for configuration issues:
@@ -193,7 +209,7 @@ def scan(file_path: str) -> List[Finding]:
                 secret_type = secret_type_match.group(1).lower() if secret_type_match else "secret"
                 rule_id = f"CONFIG_NEXT_PUBLIC_{secret_type.upper().replace('-', '_')}"
                 title = f"NEXT_PUBLIC_ variable with {secret_type}"
-                severity = Severity.CRITICAL
+                severity = Severity.CRITICAL if _looks_like_real_secret(value) else Severity.HIGH
                 recommendation = (
                     "NEXT_PUBLIC_ variables are exposed to the browser. Never expose secrets, "
                     "keys, or tokens this way."

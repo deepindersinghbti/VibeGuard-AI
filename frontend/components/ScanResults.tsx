@@ -4,11 +4,14 @@ import React from "react";
 import { explainFinding } from "../lib/api";
 import { normalizeExplanation } from "../lib/normalizeExplanation";
 import { ExplainResponse, Finding, ScanSummary, Severity } from "../types";
+import { getFindingReportKey, ScanContext } from "../utils/reportSummary";
 import { MarkdownContent } from "./MarkdownContent";
+import { DownloadPdfReportButton } from "./reports/DownloadPdfReportButton";
 
 interface ScanResultsProps {
     summary: ScanSummary;
     findings: Finding[];
+    scanContext: ScanContext;
 }
 
 const SEVERITY_BADGE: Record<Severity, string> = {
@@ -43,11 +46,17 @@ function scoreColor(score: number): string {
 }
 
 function riskLabel(score: number): string {
-    if (score >= 80) {
-        return "Safe";
+    if (score >= 90) {
+        return "Healthy";
     }
-    if (score >= 50) {
+    if (score >= 71) {
+        return "Low Risk";
+    }
+    if (score >= 46) {
         return "Moderate Risk";
+    }
+    if (score >= 21) {
+        return "High Risk";
     }
     return "Critical Risk";
 }
@@ -64,6 +73,37 @@ function summaryMessage(summary: ScanSummary): string {
     return "✅ No security issues found. Your code looks safe.";
 }
 
+function contextAwareSummaryMessage(summary: ScanSummary): string {
+    return summary.warning_message || "Security issues found. Review the findings before deploying.";
+}
+
+function criticalContextLine(summary: ScanSummary): string {
+    const productionCritical = summary.production_critical_count ?? 0;
+    const envCritical = summary.env_critical_count ?? 0;
+    const testDemoCritical = summary.test_demo_critical_count ?? 0;
+    const docsTemplateCritical = summary.docs_template_critical_count ?? 0;
+    const generatedCritical = summary.generated_dependency_critical_count ?? 0;
+    const totalCritical = productionCritical + envCritical + testDemoCritical + docsTemplateCritical + generatedCritical;
+
+    if (totalCritical === 0) {
+        return "Critical issues: 0 total";
+    }
+
+    const parts = [
+        `${totalCritical} total`,
+        `${productionCritical} production`,
+        `${envCritical} env/config`,
+        `${testDemoCritical} test/demo`,
+        `${docsTemplateCritical} docs/templates`,
+    ];
+
+    if (generatedCritical > 0) {
+        parts.push(`${generatedCritical} generated/dependencies`);
+    }
+
+    return `Critical issues: ${parts.join(" · ")}`;
+}
+
 function ScanSummaryPanel({ summary }: { summary: ScanSummary }) {
     return (
         <section className="sticky top-4 z-10 mb-8 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
@@ -77,7 +117,7 @@ function ScanSummaryPanel({ summary }: { summary: ScanSummary }) {
                         <span className="pb-2 text-sm font-semibold text-slate-500">/ 100</span>
                     </div>
                     <p className="mt-2 text-sm font-semibold text-slate-600">
-                        Security Score: {summary.score} / 100 ({riskLabel(summary.score)})
+                        Security Score: {summary.score} / 100 ({summary.risk_label || riskLabel(summary.score)})
                     </p>
                     <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
                         <div
@@ -85,7 +125,8 @@ function ScanSummaryPanel({ summary }: { summary: ScanSummary }) {
                             style={{ width: `${summary.score}%` }}
                         />
                     </div>
-                    <p className="mt-3 text-sm text-slate-500">{summaryMessage(summary)}</p>
+                    <p className="mt-3 text-sm text-slate-500">{contextAwareSummaryMessage(summary)}</p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">{criticalContextLine(summary)}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -94,6 +135,35 @@ function ScanSummaryPanel({ summary }: { summary: ScanSummary }) {
                     <SummaryMetric label="High" value={summary.high} className={SEVERITY_TEXT.high} />
                     <SummaryMetric label="Medium" value={summary.medium} className={SEVERITY_TEXT.medium} />
                     <SummaryMetric label="Low" value={summary.low} className={SEVERITY_TEXT.low} />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3 lg:col-span-2">
+                    <SummaryMetric label="Scanned files" value={summary.scanned_files ?? 0} className="text-slate-950" />
+                    <SummaryMetric label="Ignored files" value={summary.ignored_files ?? 0} className="text-slate-700" />
+                    <SummaryMetric
+                        label="Skipped generated/dependencies"
+                        value={summary.skipped_generated_dependency_files ?? 0}
+                        className="text-slate-700"
+                    />
+                </div>
+
+                <div className="border-t border-slate-100 pt-4 lg:col-span-2">
+                    <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Score breakdown
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+                        <SummaryMetric label="Base score" value={100} className="text-slate-950" />
+                        <PenaltyMetric label="Production" value={summary.production_penalty ?? 0} />
+                        <PenaltyMetric label="Real env/config" value={summary.real_env_config_penalty ?? 0} />
+                        <PenaltyMetric label="Test/demo" value={summary.test_demo_penalty ?? 0} />
+                        <PenaltyMetric label="Docs/templates" value={summary.documentation_template_penalty ?? 0} />
+                        <div className="rounded-md bg-slate-50 px-4 py-3">
+                            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Duplicate caps</p>
+                            <p className="mt-1 text-lg font-bold text-slate-700">
+                                {summary.duplicate_caps_applied ? "Yes" : "No"}
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -117,9 +187,29 @@ function SummaryMetric({
     );
 }
 
-function EmptyState({ summary }: { summary: ScanSummary }) {
+function PenaltyMetric({ label, value }: { label: string; value: number }) {
+    return <SummaryMetric label={label} value={-Math.round(value)} className="text-slate-700" />;
+}
+
+function EmptyState({
+    summary,
+    scanContext,
+    explanations,
+}: {
+    summary: ScanSummary;
+    scanContext: ScanContext;
+    explanations: Record<string, ExplainResponse>;
+}) {
     return (
         <div className="space-y-8">
+            <div className="flex justify-end">
+                <DownloadPdfReportButton
+                    summary={summary}
+                    findings={[]}
+                    explanations={explanations}
+                    scanContext={scanContext}
+                />
+            </div>
             <ScanSummaryPanel summary={summary} />
             <section className="rounded-lg bg-white px-6 py-14 text-center shadow-sm ring-1 ring-slate-200">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl">
@@ -132,14 +222,14 @@ function EmptyState({ summary }: { summary: ScanSummary }) {
     );
 }
 
-export default function ScanResults({ summary, findings }: ScanResultsProps) {
+export default function ScanResults({ summary, findings, scanContext }: ScanResultsProps) {
     const [explanations, setExplanations] = React.useState<Record<string, ExplainResponse>>({});
     const [loadingExplanations, setLoadingExplanations] = React.useState<Record<string, boolean>>({});
     const [openExplanations, setOpenExplanations] = React.useState<Record<string, boolean>>({});
     const [explanationErrors, setExplanationErrors] = React.useState<Record<string, string>>({});
 
     const findingKey = (finding: Finding, idx: number) =>
-        `${finding.rule_id}:${finding.file}:${finding.line}:${idx}`;
+        getFindingReportKey(finding, idx);
 
     const handleExplain = async (finding: Finding, key: string) => {
         // Open explanation panel
@@ -174,7 +264,7 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
     };
 
     if (findings.length === 0) {
-        return <EmptyState summary={summary} />;
+        return <EmptyState summary={summary} scanContext={scanContext} explanations={explanations} />;
     }
 
     const groupedByFile: Record<string, Finding[]> = {};
@@ -197,9 +287,17 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                             Findings are grouped by file and sorted by severity.
                         </p>
                     </div>
-                    <p className="text-sm font-medium text-slate-500">
-                        {findings.length} issue{findings.length !== 1 ? "s" : ""} found
-                    </p>
+                    <div className="flex flex-col gap-2 sm:items-end">
+                        <p className="text-sm font-medium text-slate-500">
+                            {findings.length} issue{findings.length !== 1 ? "s" : ""} found
+                        </p>
+                        <DownloadPdfReportButton
+                            summary={summary}
+                            findings={findings}
+                            explanations={explanations}
+                            scanContext={scanContext}
+                        />
+                    </div>
                 </div>
 
                 <div className="space-y-8">
@@ -238,6 +336,9 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                                                         </span>
                                                         <span className="text-xs font-medium text-slate-500">
                                                             {finding.file}:{finding.line}
+                                                        </span>
+                                                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                                                            {finding.file_context ?? "Production code"}
                                                         </span>
                                                     </div>
                                                     <h4 className="text-base font-semibold text-slate-950">

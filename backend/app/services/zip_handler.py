@@ -19,6 +19,7 @@ SKIP_DIRS = {
     ".git",
     "dist",
     "build",
+    "coverage",
     ".next",
     "venv",
     "__pycache__",
@@ -33,6 +34,7 @@ ALLOWED_EXTENSIONS = {
     ".json",
     ".yml", ".yaml",
     ".toml", ".ini",
+    ".md", ".mdx",
 }
 
 
