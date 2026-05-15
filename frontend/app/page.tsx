@@ -260,7 +260,14 @@ export default function Home() {
                 )}
 
                 {scanned && !error && summary && (
-                    <ScanResults summary={summary} findings={findings} />
+                    <ScanResults
+                        summary={summary}
+                        findings={findings}
+                        scanContext={{
+                            scanType: scanMode === "zip" ? "ZIP upload" : "GitHub repository scan",
+                            sourceName: scanMode === "zip" ? file?.name ?? "Uploaded ZIP file" : repoUrl.trim(),
+                        }}
+                    />
                 )}
             </div>
         </main>

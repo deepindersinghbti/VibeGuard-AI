@@ -4,11 +4,14 @@ import React from "react";
 import { explainFinding } from "../lib/api";
 import { normalizeExplanation } from "../lib/normalizeExplanation";
 import { ExplainResponse, Finding, ScanSummary, Severity } from "../types";
+import { getFindingReportKey, ScanContext } from "../utils/reportSummary";
 import { MarkdownContent } from "./MarkdownContent";
+import { DownloadPdfReportButton } from "./reports/DownloadPdfReportButton";
 
 interface ScanResultsProps {
     summary: ScanSummary;
     findings: Finding[];
+    scanContext: ScanContext;
 }
 
 const SEVERITY_BADGE: Record<Severity, string> = {
@@ -188,9 +191,25 @@ function PenaltyMetric({ label, value }: { label: string; value: number }) {
     return <SummaryMetric label={label} value={-Math.round(value)} className="text-slate-700" />;
 }
 
-function EmptyState({ summary }: { summary: ScanSummary }) {
+function EmptyState({
+    summary,
+    scanContext,
+    explanations,
+}: {
+    summary: ScanSummary;
+    scanContext: ScanContext;
+    explanations: Record<string, ExplainResponse>;
+}) {
     return (
         <div className="space-y-8">
+            <div className="flex justify-end">
+                <DownloadPdfReportButton
+                    summary={summary}
+                    findings={[]}
+                    explanations={explanations}
+                    scanContext={scanContext}
+                />
+            </div>
             <ScanSummaryPanel summary={summary} />
             <section className="rounded-lg bg-white px-6 py-14 text-center shadow-sm ring-1 ring-slate-200">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl">
@@ -203,14 +222,14 @@ function EmptyState({ summary }: { summary: ScanSummary }) {
     );
 }
 
-export default function ScanResults({ summary, findings }: ScanResultsProps) {
+export default function ScanResults({ summary, findings, scanContext }: ScanResultsProps) {
     const [explanations, setExplanations] = React.useState<Record<string, ExplainResponse>>({});
     const [loadingExplanations, setLoadingExplanations] = React.useState<Record<string, boolean>>({});
     const [openExplanations, setOpenExplanations] = React.useState<Record<string, boolean>>({});
     const [explanationErrors, setExplanationErrors] = React.useState<Record<string, string>>({});
 
     const findingKey = (finding: Finding, idx: number) =>
-        `${finding.rule_id}:${finding.file}:${finding.line}:${idx}`;
+        getFindingReportKey(finding, idx);
 
     const handleExplain = async (finding: Finding, key: string) => {
         // Open explanation panel
@@ -245,7 +264,7 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
     };
 
     if (findings.length === 0) {
-        return <EmptyState summary={summary} />;
+        return <EmptyState summary={summary} scanContext={scanContext} explanations={explanations} />;
     }
 
     const groupedByFile: Record<string, Finding[]> = {};
@@ -268,9 +287,17 @@ export default function ScanResults({ summary, findings }: ScanResultsProps) {
                             Findings are grouped by file and sorted by severity.
                         </p>
                     </div>
-                    <p className="text-sm font-medium text-slate-500">
-                        {findings.length} issue{findings.length !== 1 ? "s" : ""} found
-                    </p>
+                    <div className="flex flex-col gap-2 sm:items-end">
+                        <p className="text-sm font-medium text-slate-500">
+                            {findings.length} issue{findings.length !== 1 ? "s" : ""} found
+                        </p>
+                        <DownloadPdfReportButton
+                            summary={summary}
+                            findings={findings}
+                            explanations={explanations}
+                            scanContext={scanContext}
+                        />
+                    </div>
                 </div>
 
                 <div className="space-y-8">
